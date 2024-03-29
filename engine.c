@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <wchar.h>
 
+typedef enum { WHITE, BLACK } side_t;
+
 typedef struct {
   uint64_t white_pawns;
   uint64_t white_knights;
@@ -20,6 +22,8 @@ typedef struct {
   uint64_t black_king;
 
   uint8_t fifty_move_rule_count;
+
+  side_t side;
 } board_t;
 
 // clang-format off
@@ -107,6 +111,7 @@ board_t *board_new() {
   board->black_king = 0ULL;
 
   board->fifty_move_rule_count = 0;
+  board->side = WHITE;
 
   return board;
 }
@@ -157,6 +162,7 @@ void board_print(board_t *board) {
     printf("%3c", ranks[i]);
   }
   printf("\n\nFifty move rule count: %d\n", board->fifty_move_rule_count);
+  printf("Side to play: %s\n", board->side == WHITE ? "White" : "Black");
 }
 
 void board_set_starting_position(board_t *board) {
