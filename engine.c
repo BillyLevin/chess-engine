@@ -61,14 +61,14 @@ void bitboard_print(uint64_t bitboard, piece_t piece) {
   for (int rank = 7; rank >= 0; rank--) {
     for (int file = 0; file < 8; file++) {
       if (file == 0) {
-        printf("%3d", rank);
+        printf("%3d", rank + 1);
       }
 
       // https://www.chessprogramming.org/Square_Mapping_Considerations#Deduction_on_Files_and_Ranks
       int square = (rank * 8) + file;
-      int occupation = (bitboard & (1ULL << square));
+      uint64_t occupation = (bitboard & (1ULL << square));
 
-      if (occupation) {
+      if (occupation > 0) {
         piece_print(piece);
       } else {
         printf("%3d", 0);
@@ -112,6 +112,10 @@ int main() {
   bitboard_print(board->white_pawns, WHITE_PAWN);
 
   board->white_pawns |= 1ULL << A2;
+
+  bitboard_print(board->white_pawns, WHITE_PAWN);
+
+  board->white_pawns |= 1ULL << E6;
 
   bitboard_print(board->white_pawns, WHITE_PAWN);
 
