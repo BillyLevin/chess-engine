@@ -1,6 +1,8 @@
+#include <locale.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wchar.h>
 
 typedef struct {
   uint64_t white_pawns;
@@ -31,7 +33,31 @@ typedef enum {
 } square_t;
 // clang-format on
 
-void bitboard_print(uint64_t bitboard) {
+typedef enum {
+  WHITE_PAWN,
+  WHITE_KNIGHT,
+  WHITE_BISHOP,
+  WHITE_ROOK,
+  WHITE_QUEEN,
+  WHITE_KING,
+  BLACK_PAWN,
+  BLACK_KNIGHT,
+  BLACK_BISHOP,
+  BLACK_ROOK,
+  BLACK_QUEEN,
+  BLACK_KING,
+} piece_t;
+
+const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
+                                   0x2655, 0x2654, 0x265F, 0x265E,
+                                   0x265D, 0x265C, 0x265B, 0x265A};
+
+void piece_print(piece_t piece) {
+  setlocale(LC_CTYPE, "");
+  printf("  %lc", PIECE_UNICODE[piece]);
+}
+
+void bitboard_print(uint64_t bitboard, piece_t piece) {
   for (int rank = 7; rank >= 0; rank--) {
     for (int file = 0; file < 8; file++) {
       if (file == 0) {
@@ -40,9 +66,13 @@ void bitboard_print(uint64_t bitboard) {
 
       // https://www.chessprogramming.org/Square_Mapping_Considerations#Deduction_on_Files_and_Ranks
       int square = (rank * 8) + file;
-      int occupation = (bitboard & (1ULL << square)) ? 1 : 0;
+      int occupation = (bitboard & (1ULL << square));
 
-      printf("%3d", occupation);
+      if (occupation) {
+        piece_print(piece);
+      } else {
+        printf("%3d", 0);
+      }
     }
 
     printf("\n");
@@ -79,11 +109,11 @@ board_t *board_new() {
 int main() {
   board_t *board = board_new();
 
-  bitboard_print(board->white_pawns);
+  bitboard_print(board->white_pawns, WHITE_PAWN);
 
   board->white_pawns |= 1ULL << A2;
 
-  bitboard_print(board->white_pawns);
+  bitboard_print(board->white_pawns, WHITE_PAWN);
 
   return EXIT_SUCCESS;
 }
