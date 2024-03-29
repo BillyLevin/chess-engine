@@ -18,6 +18,8 @@ typedef struct {
   uint64_t black_rooks;
   uint64_t black_queens;
   uint64_t black_king;
+
+  uint8_t fifty_move_rule_count;
 } board_t;
 
 // clang-format off
@@ -104,6 +106,8 @@ board_t *board_new() {
   board->black_queens = 0ULL;
   board->black_king = 0ULL;
 
+  board->fifty_move_rule_count = 0;
+
   return board;
 }
 
@@ -114,6 +118,8 @@ void board_print(board_t *board) {
       board->black_pawns, board->black_knights, board->black_bishops,
       board->black_rooks, board->black_queens,  board->black_king,
   };
+
+  printf("\n");
 
   for (int rank = 7; rank >= 0; rank--) {
     for (int file = 0; file < 8; file++) {
@@ -150,7 +156,7 @@ void board_print(board_t *board) {
   for (int i = 0; i < 8; i++) {
     printf("%3c", ranks[i]);
   }
-  printf("\n\n");
+  printf("\n\nFifty move rule count: %d\n", board->fifty_move_rule_count);
 }
 
 void board_set_starting_position(board_t *board) {
