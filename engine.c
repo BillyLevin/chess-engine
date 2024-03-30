@@ -301,6 +301,7 @@ bool board_parse_FEN(board_t *board, char *fen) {
       return false;
     }
 
+    fen++;
     castle_check_count++;
   }
 
