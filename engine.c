@@ -8,6 +8,13 @@
 
 typedef enum { WHITE, BLACK } side_t;
 
+enum {
+  WHITE_KING_CASTLE = 1,
+  WHITE_QUEEN_CASTLE = 2,
+  BLACK_KING_CASTLE = 4,
+  BLACK_QUEEN_CASTLE = 8
+};
+
 typedef struct {
   uint64_t white_pawns;
   uint64_t white_knights;
@@ -26,6 +33,8 @@ typedef struct {
   uint8_t fifty_move_rule_count;
 
   side_t side;
+
+  int castle_rights;
 } board_t;
 
 // clang-format off
@@ -114,6 +123,7 @@ board_t *board_new() {
 
   board->fifty_move_rule_count = 0;
   board->side = WHITE;
+  board->castle_rights = 0;
 
   return board;
 }
@@ -248,6 +258,40 @@ bool board_parse_FEN(board_t *board, char *fen) {
   default:
     printf("Invalid FEN. Character `%c` is not a valid color notation", *fen);
     return false;
+  }
+
+  fen++;
+  if (*fen != ' ') {
+    printf("Invalid FEN. Expected a space after current color notation");
+    return false;
+  }
+
+  fen++;
+
+  int castle_check_count = 0;
+
+  while (*fen != ' ' && castle_check_count < 4) {
+    switch (*fen) {
+    case 'K':
+      board->castle_rights |= WHITE_KING_CASTLE;
+      break;
+    case 'Q':
+      board->castle_rights |= WHITE_QUEEN_CASTLE;
+      break;
+    case 'k':
+      board->castle_rights |= BLACK_KING_CASTLE;
+      break;
+    case 'q':
+      board->castle_rights |= BLACK_QUEEN_CASTLE;
+      break;
+    default:
+      printf(
+          "Invalid FEN. Character `%c` is not a valid castling rights notation",
+          *fen);
+      return false;
+    }
+
+    castle_check_count++;
   }
 
   return true;
