@@ -170,6 +170,7 @@ void board_print(board_t *board) {
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 #define START_E4_FEN                                                           \
   "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+#define OPERA_GAME_FEN "1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17"
 
 bool board_parse_FEN(board_t *board, char *fen) {
   int rank = 7;
@@ -232,8 +233,21 @@ bool board_parse_FEN(board_t *board, char *fen) {
       file = 0;
       fen++;
     } else if (*fen == ' ') {
+      fen++;
       break;
     }
+  }
+
+  switch (*fen) {
+  case 'w':
+    board->side = WHITE;
+    break;
+  case 'b':
+    board->side = BLACK;
+    break;
+  default:
+    printf("Invalid FEN. Character `%c` is not a valid color notation", *fen);
+    return false;
   }
 
   return true;
@@ -242,7 +256,7 @@ bool board_parse_FEN(board_t *board, char *fen) {
 int main() {
   board_t *board = board_new();
 
-  board_parse_FEN(board, START_E4_FEN);
+  board_parse_FEN(board, OPERA_GAME_FEN);
   board_print(board);
 
   return EXIT_SUCCESS;
