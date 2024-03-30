@@ -54,7 +54,7 @@ typedef struct {
   uint64_t black_queens;
   uint64_t black_king;
 
-  uint8_t fifty_move_rule_count;
+  uint8_t halfmove_clock;
 
   side_t side;
 
@@ -134,7 +134,7 @@ board_t *board_new() {
   board->black_queens = 0ULL;
   board->black_king = 0ULL;
 
-  board->fifty_move_rule_count = 0;
+  board->halfmove_clock = 0;
   board->side = WHITE;
   board->castle_rights = 0;
   board->en_passant_square = NO_SQUARE;
@@ -188,7 +188,7 @@ void board_print(board_t *board) {
     printf("%3c", ranks[i]);
   }
 
-  printf("\n\nFifty move rule count: %d\n", board->fifty_move_rule_count);
+  printf("\n\nHalfmove clock count: %d\n", board->halfmove_clock);
   printf("Side to play: %s\n", board->side == WHITE ? "White" : "Black");
   printf("Castling rights:\n");
   printf("  - White kingside: %s\n",
