@@ -173,8 +173,18 @@ void board_print(board_t *board) {
   for (int i = 0; i < 8; i++) {
     printf("%3c", ranks[i]);
   }
+
   printf("\n\nFifty move rule count: %d\n", board->fifty_move_rule_count);
   printf("Side to play: %s\n", board->side == WHITE ? "White" : "Black");
+  printf("Castling rights:\n");
+  printf("  - White kingside: %s\n",
+         board->castle_rights & WHITE_KING_CASTLE ? "yes" : "no");
+  printf("  - White queenside: %s\n",
+         board->castle_rights & WHITE_QUEEN_CASTLE ? "yes" : "no");
+  printf("  - Black kingside: %s\n",
+         board->castle_rights & BLACK_KING_CASTLE ? "yes" : "no");
+  printf("  - Black queenside: %s\n",
+         board->castle_rights & BLACK_QUEEN_CASTLE ? "yes" : "no");
 }
 
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
