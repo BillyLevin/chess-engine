@@ -1,4 +1,6 @@
+#include <ctype.h>
 #include <locale.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -165,57 +167,82 @@ void board_print(board_t *board) {
   printf("Side to play: %s\n", board->side == WHITE ? "White" : "Black");
 }
 
-void board_set_starting_position(board_t *board) {
-  board->white_pawns |= 1ULL << A2;
-  board->white_pawns |= 1ULL << B2;
-  board->white_pawns |= 1ULL << C2;
-  board->white_pawns |= 1ULL << D2;
-  board->white_pawns |= 1ULL << E2;
-  board->white_pawns |= 1ULL << F2;
-  board->white_pawns |= 1ULL << G2;
-  board->white_pawns |= 1ULL << H2;
+#define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+#define START_E4_FEN                                                           \
+  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
 
-  board->white_knights |= 1ULL << B1;
-  board->white_knights |= 1ULL << G1;
+bool board_parse_FEN(board_t *board, char *fen) {
+  int rank = 7;
+  int file = 0;
 
-  board->white_bishops |= 1ULL << C1;
-  board->white_bishops |= 1ULL << F1;
+  while (rank >= 0) {
+    int square = (rank * 8) + file;
 
-  board->white_rooks |= 1ULL << A1;
-  board->white_rooks |= 1ULL << H1;
+    if (isalpha(*fen)) {
+      switch (*fen) {
+      case 'p':
+        board->black_pawns |= 1ULL << square;
+        break;
+      case 'n':
+        board->black_knights |= 1ULL << square;
+        break;
+      case 'b':
+        board->black_bishops |= 1ULL << square;
+        break;
+      case 'r':
+        board->black_rooks |= 1ULL << square;
+        break;
+      case 'q':
+        board->black_queens |= 1ULL << square;
+        break;
+      case 'k':
+        board->black_king |= 1ULL << square;
+        break;
+      case 'P':
+        board->white_pawns |= 1ULL << square;
+        break;
+      case 'N':
+        board->white_knights |= 1ULL << square;
+        break;
+      case 'B':
+        board->white_bishops |= 1ULL << square;
+        break;
+      case 'R':
+        board->white_rooks |= 1ULL << square;
+        break;
+      case 'Q':
+        board->white_queens |= 1ULL << square;
+        break;
+      case 'K':
+        board->white_king |= 1ULL << square;
+        break;
+      default:
+        printf("Invalid FEN. Character `%c` is not a valid piece notation",
+               *fen);
+        return false;
+      }
+      file++;
+      fen++;
+    } else if (isdigit(*fen)) {
+      int increment = *fen - '0';
+      file += increment;
+      fen++;
+    } else if (*fen == '/') {
+      rank--;
+      file = 0;
+      fen++;
+    } else if (*fen == ' ') {
+      break;
+    }
+  }
 
-  board->white_queens |= 1ULL << D1;
-  board->white_king |= 1ULL << E1;
-
-  board->black_knights |= 1ULL << B8;
-  board->black_knights |= 1ULL << G8;
-
-  board->black_pawns |= 1ULL << A7;
-  board->black_pawns |= 1ULL << B7;
-  board->black_pawns |= 1ULL << C7;
-  board->black_pawns |= 1ULL << D7;
-  board->black_pawns |= 1ULL << E7;
-  board->black_pawns |= 1ULL << F7;
-  board->black_pawns |= 1ULL << G7;
-  board->black_pawns |= 1ULL << H7;
-
-  board->black_knights |= 1ULL << B8;
-  board->black_knights |= 1ULL << G8;
-
-  board->black_bishops |= 1ULL << C8;
-  board->black_bishops |= 1ULL << F8;
-
-  board->black_rooks |= 1ULL << A8;
-  board->black_rooks |= 1ULL << H8;
-
-  board->black_queens |= 1ULL << D8;
-  board->black_king |= 1ULL << E8;
+  return true;
 }
 
 int main() {
   board_t *board = board_new();
 
-  board_set_starting_position(board);
+  board_parse_FEN(board, START_E4_FEN);
   board_print(board);
 
   return EXIT_SUCCESS;
