@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <wchar.h>
 
 typedef enum { WHITE, BLACK } side_t;
@@ -209,6 +210,8 @@ void board_print(board_t *board) {
 #define START_E4_FEN                                                           \
   "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
 #define OPERA_GAME_FEN "1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17"
+#define HIGH_HALFMOVE_FEN                                                      \
+  "r1bq1rk1/ppp2pbp/2np1np1/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 20 11"
 
 bool board_parse_FEN(board_t *board, char *fen) {
   int rank = 7;
@@ -312,6 +315,9 @@ bool board_parse_FEN(board_t *board, char *fen) {
     case 'q':
       board->castle_rights |= BLACK_QUEEN_CASTLE;
       break;
+    case '-':
+      board->castle_rights = 0;
+      break;
     default:
       printf(
           "Invalid FEN. Character `%c` is not a valid castling rights notation",
@@ -352,13 +358,37 @@ bool board_parse_FEN(board_t *board, char *fen) {
     fen += 2;
   }
 
+  if (*fen != ' ') {
+    printf("Invalid FEN. Expected a space after en passant square notation");
+    return false;
+  }
+
+  fen++;
+
+  char halfmoves[6];
+  int halfmove_length = 0;
+
+  while (isdigit(*fen)) {
+    halfmoves[halfmove_length] = *fen;
+    halfmove_length++;
+    fen++;
+  }
+
+  halfmoves[halfmove_length] = '\0';
+
+  if (halfmove_length == 0) {
+    printf("Invalid FEN. Expected a halfmove count");
+    return false;
+  }
+
+  board->halfmove_clock = strtol(halfmoves, NULL, 10);
   return true;
 }
 
 int main() {
   board_t *board = board_new();
 
-  board_parse_FEN(board, START_E4_FEN);
+  board_parse_FEN(board, HIGH_HALFMOVE_FEN);
   board_print(board);
 
   return EXIT_SUCCESS;
