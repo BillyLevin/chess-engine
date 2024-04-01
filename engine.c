@@ -40,6 +40,22 @@ const char SQUARE_TO_READABLE[][3] = {
 };
 // clang-format on
 
+typedef enum {
+  WHITE_PAWN,
+  WHITE_KNIGHT,
+  WHITE_BISHOP,
+  WHITE_ROOK,
+  WHITE_QUEEN,
+  WHITE_KING,
+  BLACK_PAWN,
+  BLACK_KNIGHT,
+  BLACK_BISHOP,
+  BLACK_ROOK,
+  BLACK_QUEEN,
+  BLACK_KING,
+  EMPTY,
+} piece_t;
+
 typedef struct {
   uint64_t white_pawns;
   uint64_t white_knights;
@@ -57,28 +73,14 @@ typedef struct {
 
   uint8_t halfmove_clock;
 
+  piece_t pieces[64];
+
   side_t side;
 
   int castle_rights;
 
   square_t en_passant_square;
 } board_t;
-
-typedef enum {
-  WHITE_PAWN,
-  WHITE_KNIGHT,
-  WHITE_BISHOP,
-  WHITE_ROOK,
-  WHITE_QUEEN,
-  WHITE_KING,
-  BLACK_PAWN,
-  BLACK_KNIGHT,
-  BLACK_BISHOP,
-  BLACK_ROOK,
-  BLACK_QUEEN,
-  BLACK_KING,
-  EMPTY,
-} piece_t;
 
 const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
                                    0x2655, 0x2654, 0x265F, 0x265E,
@@ -140,17 +142,14 @@ board_t *board_new() {
   board->castle_rights = 0;
   board->en_passant_square = NO_SQUARE;
 
+  for (int i = 0; i < 64; i++) {
+    board->pieces[i] = EMPTY;
+  }
+
   return board;
 }
 
 void board_print(board_t *board) {
-  uint64_t bitboards[12] = {
-      board->white_pawns, board->white_knights, board->white_bishops,
-      board->white_rooks, board->white_queens,  board->white_king,
-      board->black_pawns, board->black_knights, board->black_bishops,
-      board->black_rooks, board->black_queens,  board->black_king,
-  };
-
   printf("\n");
 
   for (int rank = 7; rank >= 0; rank--) {
@@ -159,19 +158,9 @@ void board_print(board_t *board) {
         printf("%3d", rank + 1);
       }
 
-      // https://www.chessprogramming.org/Square_Mapping_Considerations#Deduction_on_Files_and_Ranks
       int square = (rank * 8) + file;
 
-      piece_t piece = EMPTY;
-
-      for (int i = 0; i < 12; i++) {
-        uint64_t occupation = (bitboards[i] & (1ULL << square));
-
-        if (occupation > 0) {
-          piece = i;
-          break;
-        }
-      }
+      piece_t piece = board->pieces[square];
 
       if (piece != EMPTY) {
         piece_print(piece);
@@ -224,39 +213,51 @@ bool board_parse_FEN(board_t *board, char *fen) {
       switch (*fen) {
       case 'p':
         board->black_pawns |= 1ULL << square;
+        board->pieces[square] = BLACK_PAWN;
         break;
       case 'n':
         board->black_knights |= 1ULL << square;
+        board->pieces[square] = BLACK_KNIGHT;
         break;
       case 'b':
         board->black_bishops |= 1ULL << square;
+        board->pieces[square] = BLACK_BISHOP;
         break;
       case 'r':
         board->black_rooks |= 1ULL << square;
+        board->pieces[square] = BLACK_ROOK;
         break;
       case 'q':
         board->black_queens |= 1ULL << square;
+        board->pieces[square] = BLACK_QUEEN;
         break;
       case 'k':
         board->black_king |= 1ULL << square;
+        board->pieces[square] = BLACK_KING;
         break;
       case 'P':
         board->white_pawns |= 1ULL << square;
+        board->pieces[square] = WHITE_PAWN;
         break;
       case 'N':
         board->white_knights |= 1ULL << square;
+        board->pieces[square] = WHITE_KNIGHT;
         break;
       case 'B':
         board->white_bishops |= 1ULL << square;
+        board->pieces[square] = WHITE_BISHOP;
         break;
       case 'R':
         board->white_rooks |= 1ULL << square;
+        board->pieces[square] = WHITE_ROOK;
         break;
       case 'Q':
         board->white_queens |= 1ULL << square;
+        board->pieces[square] = WHITE_QUEEN;
         break;
       case 'K':
         board->white_king |= 1ULL << square;
+        board->pieces[square] = WHITE_KING;
         break;
       default:
         printf("Invalid FEN. Character `%c` is not a valid piece notation",
