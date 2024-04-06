@@ -75,6 +75,8 @@ typedef struct {
 
   piece_t pieces[64];
 
+  uint64_t occupancies[2];
+
   side_t side;
 
   int castle_rights;
@@ -146,6 +148,9 @@ board_t *board_new() {
     board->pieces[i] = EMPTY;
   }
 
+  board->occupancies[WHITE] = 0ULL;
+  board->occupancies[BLACK] = 0ULL;
+
   return board;
 }
 
@@ -202,6 +207,74 @@ void board_print(board_t *board) {
 #define HIGH_HALFMOVE_FEN                                                      \
   "r1bq1rk1/ppp2pbp/2np1np1/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 20 11"
 
+void board_insert_piece(board_t *board, const piece_t piece, const int square) {
+  switch (piece) {
+  case WHITE_PAWN:
+    board->white_pawns |= 1ULL << square;
+    board->pieces[square] = WHITE_PAWN;
+    board->occupancies[WHITE] |= 1ULL << square;
+    break;
+  case WHITE_KNIGHT:
+    board->white_knights |= 1ULL << square;
+    board->pieces[square] = WHITE_KNIGHT;
+    board->occupancies[WHITE] |= 1ULL << square;
+    break;
+  case WHITE_BISHOP:
+    board->white_bishops |= 1ULL << square;
+    board->pieces[square] = WHITE_BISHOP;
+    board->occupancies[WHITE] |= 1ULL << square;
+    break;
+  case WHITE_ROOK:
+    board->white_rooks |= 1ULL << square;
+    board->pieces[square] = WHITE_ROOK;
+    board->occupancies[WHITE] |= 1ULL << square;
+    break;
+  case WHITE_QUEEN:
+    board->white_queens |= 1ULL << square;
+    board->pieces[square] = WHITE_QUEEN;
+    board->occupancies[WHITE] |= 1ULL << square;
+    break;
+  case WHITE_KING:
+    board->white_king |= 1ULL << square;
+    board->pieces[square] = WHITE_KING;
+    board->occupancies[WHITE] |= 1ULL << square;
+    break;
+  case BLACK_PAWN:
+    board->black_pawns |= 1ULL << square;
+    board->pieces[square] = BLACK_PAWN;
+    board->occupancies[BLACK] |= 1ULL << square;
+    break;
+  case BLACK_KNIGHT:
+    board->black_knights |= 1ULL << square;
+    board->pieces[square] = BLACK_KNIGHT;
+    board->occupancies[BLACK] |= 1ULL << square;
+    break;
+  case BLACK_BISHOP:
+    board->black_bishops |= 1ULL << square;
+    board->pieces[square] = BLACK_BISHOP;
+    board->occupancies[BLACK] |= 1ULL << square;
+    break;
+  case BLACK_ROOK:
+    board->black_rooks |= 1ULL << square;
+    board->pieces[square] = BLACK_ROOK;
+    board->occupancies[BLACK] |= 1ULL << square;
+    break;
+  case BLACK_QUEEN:
+    board->black_queens |= 1ULL << square;
+    board->pieces[square] = BLACK_QUEEN;
+    board->occupancies[BLACK] |= 1ULL << square;
+    break;
+  case BLACK_KING:
+    board->black_king |= 1ULL << square;
+    board->pieces[square] = BLACK_KING;
+    board->occupancies[BLACK] |= 1ULL << square;
+    break;
+  case EMPTY:
+    board->pieces[square] = EMPTY;
+    break;
+  }
+}
+
 bool board_parse_FEN(board_t *board, char *fen) {
   int rank = 7;
   int file = 0;
@@ -212,52 +285,40 @@ bool board_parse_FEN(board_t *board, char *fen) {
     if (isalpha(*fen)) {
       switch (*fen) {
       case 'p':
-        board->black_pawns |= 1ULL << square;
-        board->pieces[square] = BLACK_PAWN;
+        board_insert_piece(board, BLACK_PAWN, square);
         break;
       case 'n':
-        board->black_knights |= 1ULL << square;
-        board->pieces[square] = BLACK_KNIGHT;
+        board_insert_piece(board, BLACK_KNIGHT, square);
         break;
       case 'b':
-        board->black_bishops |= 1ULL << square;
-        board->pieces[square] = BLACK_BISHOP;
+        board_insert_piece(board, BLACK_BISHOP, square);
         break;
       case 'r':
-        board->black_rooks |= 1ULL << square;
-        board->pieces[square] = BLACK_ROOK;
+        board_insert_piece(board, BLACK_ROOK, square);
         break;
       case 'q':
-        board->black_queens |= 1ULL << square;
-        board->pieces[square] = BLACK_QUEEN;
+        board_insert_piece(board, BLACK_QUEEN, square);
         break;
       case 'k':
-        board->black_king |= 1ULL << square;
-        board->pieces[square] = BLACK_KING;
+        board_insert_piece(board, BLACK_KING, square);
         break;
       case 'P':
-        board->white_pawns |= 1ULL << square;
-        board->pieces[square] = WHITE_PAWN;
+        board_insert_piece(board, WHITE_PAWN, square);
         break;
       case 'N':
-        board->white_knights |= 1ULL << square;
-        board->pieces[square] = WHITE_KNIGHT;
+        board_insert_piece(board, WHITE_KNIGHT, square);
         break;
       case 'B':
-        board->white_bishops |= 1ULL << square;
-        board->pieces[square] = WHITE_BISHOP;
+        board_insert_piece(board, WHITE_BISHOP, square);
         break;
       case 'R':
-        board->white_rooks |= 1ULL << square;
-        board->pieces[square] = WHITE_ROOK;
+        board_insert_piece(board, WHITE_ROOK, square);
         break;
       case 'Q':
-        board->white_queens |= 1ULL << square;
-        board->pieces[square] = WHITE_QUEEN;
+        board_insert_piece(board, WHITE_QUEEN, square);
         break;
       case 'K':
-        board->white_king |= 1ULL << square;
-        board->pieces[square] = WHITE_KING;
+        board_insert_piece(board, WHITE_KING, square);
         break;
       default:
         printf("Invalid FEN. Character `%c` is not a valid piece notation",
@@ -389,7 +450,7 @@ bool board_parse_FEN(board_t *board, char *fen) {
 int main() {
   board_t *board = board_new();
 
-  board_parse_FEN(board, HIGH_HALFMOVE_FEN);
+  board_parse_FEN(board, OPERA_GAME_FEN);
   board_print(board);
 
   return EXIT_SUCCESS;
