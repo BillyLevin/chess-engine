@@ -462,8 +462,11 @@ uint64_t get_lsb(const uint64_t bitboard) {
   return bitboard & -bitboard;
 }
 
-void pop_bit(uint64_t *bitboard, const square_t square) {
+int bitboard_pop_bit(uint64_t *bitboard) {
+  uint64_t lsb = get_lsb(*bitboard);
+  int square = __builtin_ctzll(lsb);
   *bitboard ^= (1ULL << square);
+  return square;
 }
 
 void generate_pawn_pushes(const board_t *board) {
@@ -473,9 +476,7 @@ void generate_pawn_pushes(const board_t *board) {
   uint64_t push_destinations = (board->white_pawns << 8) & empty;
 
   while (push_destinations != 0) {
-    uint64_t lsb = get_lsb(push_destinations);
-    int square = __builtin_ctzll(lsb);
-    pop_bit(&push_destinations, square);
+    int square = bitboard_pop_bit(&push_destinations);
 
     uint64_t potential_double_push = 1ULL << (square + 8);
 
