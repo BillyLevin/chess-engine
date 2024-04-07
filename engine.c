@@ -452,11 +452,43 @@ bool board_parse_FEN(board_t *board, char *fen) {
   return true;
 }
 
+uint64_t get_lsb(const uint64_t bitboard) {
+  if (bitboard == 0) {
+    return 0;
+  }
+
+  return bitboard & -bitboard;
+}
+
+void pop_bit(uint64_t *bitboard, const square_t square) {
+  *bitboard ^= (1ULL << square);
+}
+
+void generate_pawn_pushes(const board_t *board) {
+  // each occupied square is set to `1`
+  uint64_t empty = ~(board->occupancies[WHITE] | board->occupancies[BLACK]);
+
+  uint64_t push_destinations = (board->white_pawns << 8) & empty;
+
+  while (push_destinations != 0) {
+    uint64_t lsb = get_lsb(push_destinations);
+    int square = __builtin_ctzll(lsb);
+    pop_bit(&push_destinations, square);
+
+    printf("FROM: %s, TO: %s\n", SQUARE_TO_READABLE[square - 8],
+           SQUARE_TO_READABLE[square]);
+  }
+
+  bitboard_print(push_destinations, WHITE_PAWN);
+}
+
 int main() {
   board_t *board = board_new();
 
   board_parse_FEN(board, OPERA_GAME_FEN);
   board_print(board);
+
+  generate_pawn_pushes(board);
 
   return EXIT_SUCCESS;
 }
