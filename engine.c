@@ -62,6 +62,11 @@ typedef struct {
 } move_t;
 
 typedef struct {
+  move_t moves[512];
+  size_t count;
+} move_list_t;
+
+typedef struct {
   uint64_t white_pawns;
   uint64_t white_knights;
   uint64_t white_bishops;
