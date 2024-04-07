@@ -224,6 +224,8 @@ void board_print(board_t *board) {
 #define OPERA_GAME_FEN "1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17"
 #define HIGH_HALFMOVE_FEN                                                      \
   "r1bq1rk1/ppp2pbp/2np1np1/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 20 11"
+#define PAWN_CAPTURES_FEN                                                      \
+  "rn1qkb1r/ppp1pppp/5n2/3p1b2/2B1P3/2N5/PPPP1PPP/R1BQK1NR w KQkq - 4 4"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -573,7 +575,7 @@ int main() {
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, OPERA_GAME_FEN);
+  board_parse_FEN(board, PAWN_CAPTURES_FEN);
   board_print(board);
 
   move_list_t *move_list = move_list_new();
