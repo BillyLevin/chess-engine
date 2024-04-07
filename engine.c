@@ -93,6 +93,8 @@ const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
                                    0x2655, 0x2654, 0x265F, 0x265E,
                                    0x265D, 0x265C, 0x265B, 0x265A};
 
+const uint64_t RANK_4_MASK = 4278190080ULL;
+
 void piece_print(piece_t piece) {
   setlocale(LC_CTYPE, "");
   printf("  %lc", PIECE_UNICODE[piece]);
@@ -475,11 +477,16 @@ void generate_pawn_pushes(const board_t *board) {
     int square = __builtin_ctzll(lsb);
     pop_bit(&push_destinations, square);
 
+    uint64_t potential_double_push = 1ULL << (square + 8);
+
+    if ((potential_double_push & RANK_4_MASK & empty) != 0) {
+      printf("FROM: %s, TO: %s\n", SQUARE_TO_READABLE[square - 8],
+             SQUARE_TO_READABLE[square + 8]);
+    }
+
     printf("FROM: %s, TO: %s\n", SQUARE_TO_READABLE[square - 8],
            SQUARE_TO_READABLE[square]);
   }
-
-  bitboard_print(push_destinations, WHITE_PAWN);
 }
 
 int main() {
