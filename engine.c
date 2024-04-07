@@ -101,6 +101,11 @@ const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
 const uint64_t RANK_4_MASK = 4278190080ULL;
 const uint64_t RANK_5_MASK = 1095216660480ULL;
 
+const uint64_t NOT_A_FILE = 18374403900871474942ULL;
+const uint64_t NOT_H_FILE = 9187201950435737471ULL;
+
+uint64_t PAWN_ATTACKS[2][64];
+
 void piece_print(piece_t piece) {
   setlocale(LC_CTYPE, "");
   printf("  %lc", PIECE_UNICODE[piece]);
@@ -132,7 +137,7 @@ void bitboard_print(uint64_t bitboard, piece_t piece) {
   for (int i = 0; i < 8; i++) {
     printf("%3c", ranks[i]);
   }
-  printf("\n\n");
+  printf("\nRaw value: %lu\n\n", bitboard);
 };
 
 board_t *board_new() {
@@ -519,8 +524,6 @@ void generate_pawn_pushes(const board_t *board, move_list_t *move_list) {
   } else {
     uint64_t push_destinations = (board->black_pawns >> 8) & empty;
 
-    bitboard_print(push_destinations, BLACK_PAWN);
-
     while (push_destinations != 0) {
       int square = bitboard_pop_bit(&push_destinations);
 
@@ -537,7 +540,37 @@ void generate_pawn_pushes(const board_t *board, move_list_t *move_list) {
   }
 }
 
+uint64_t generate_pawn_attack_mask(square_t square, side_t side) {
+  uint64_t mask = 0ULL;
+  uint64_t bitboard = 0ULL;
+
+  bitboard |= (1ULL << square);
+
+  if (side == WHITE) {
+    uint64_t east_attacks = (bitboard << 9) & NOT_A_FILE;
+    uint64_t west_attacks = (bitboard << 7) & NOT_H_FILE;
+    mask |= east_attacks;
+    mask |= west_attacks;
+  } else {
+    uint64_t east_attacks = (bitboard >> 7) & NOT_A_FILE;
+    uint64_t west_attacks = (bitboard >> 9) & NOT_H_FILE;
+    mask |= east_attacks;
+    mask |= west_attacks;
+  }
+
+  return mask;
+}
+
+void init_pawn_attack_masks() {
+  for (int i = 0; i < 64; i++) {
+    PAWN_ATTACKS[WHITE][i] = generate_pawn_attack_mask(i, WHITE);
+    PAWN_ATTACKS[BLACK][i] = generate_pawn_attack_mask(i, BLACK);
+  }
+}
+
 int main() {
+  init_pawn_attack_masks();
+
   board_t *board = board_new();
 
   board_parse_FEN(board, OPERA_GAME_FEN);
