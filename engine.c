@@ -474,7 +474,28 @@ int bitboard_pop_bit(uint64_t *bitboard) {
   return square;
 }
 
-void generate_pawn_pushes(const board_t *board) {
+move_list_t *move_list_new() {
+  move_list_t *move_list = malloc(sizeof(move_list_t));
+  return move_list;
+}
+
+void move_list_push(move_list_t *move_list, move_t move) {
+  move_list->moves[move_list->count] = move;
+  move_list->count++;
+}
+
+void move_list_print(move_list_t *move_list) {
+  printf("Generated Moves:\n");
+  for (size_t i = 0; i < move_list->count; i++) {
+    move_t move = move_list->moves[i];
+
+    printf("From: %s, to: %s\n", SQUARE_TO_READABLE[move.from],
+           SQUARE_TO_READABLE[move.to]);
+  }
+  printf("\nTotal moves: %zu\n", move_list->count);
+}
+
+void generate_pawn_pushes(const board_t *board, move_list_t *move_list) {
   // each occupied square is set to `1`
   uint64_t empty = ~(board->occupancies[WHITE] | board->occupancies[BLACK]);
 
@@ -483,15 +504,15 @@ void generate_pawn_pushes(const board_t *board) {
   while (push_destinations != 0) {
     int square = bitboard_pop_bit(&push_destinations);
 
+    move_t move = {.from = square - 8, .to = square};
+    move_list_push(move_list, move);
+
     uint64_t potential_double_push = 1ULL << (square + 8);
 
     if ((potential_double_push & RANK_4_MASK & empty) != 0) {
-      printf("FROM: %s, TO: %s\n", SQUARE_TO_READABLE[square - 8],
-             SQUARE_TO_READABLE[square + 8]);
+      move_t move = {.from = square - 8, .to = square + 8};
+      move_list_push(move_list, move);
     }
-
-    printf("FROM: %s, TO: %s\n", SQUARE_TO_READABLE[square - 8],
-           SQUARE_TO_READABLE[square]);
   }
 }
 
@@ -501,7 +522,11 @@ int main() {
   board_parse_FEN(board, OPERA_GAME_FEN);
   board_print(board);
 
-  generate_pawn_pushes(board);
+  move_list_t *move_list = move_list_new();
+
+  generate_pawn_pushes(board, move_list);
+
+  move_list_print(move_list);
 
   return EXIT_SUCCESS;
 }
