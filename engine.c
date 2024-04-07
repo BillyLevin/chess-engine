@@ -99,6 +99,7 @@ const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
                                    0x265D, 0x265C, 0x265B, 0x265A};
 
 const uint64_t RANK_4_MASK = 4278190080ULL;
+const uint64_t RANK_5_MASK = 1095216660480ULL;
 
 void piece_print(piece_t piece) {
   setlocale(LC_CTYPE, "");
@@ -499,19 +500,39 @@ void generate_pawn_pushes(const board_t *board, move_list_t *move_list) {
   // each occupied square is set to `1`
   uint64_t empty = ~(board->occupancies[WHITE] | board->occupancies[BLACK]);
 
-  uint64_t push_destinations = (board->white_pawns << 8) & empty;
+  if (board->side == WHITE) {
+    uint64_t push_destinations = (board->white_pawns << 8) & empty;
 
-  while (push_destinations != 0) {
-    int square = bitboard_pop_bit(&push_destinations);
+    while (push_destinations != 0) {
+      int square = bitboard_pop_bit(&push_destinations);
 
-    move_t move = {.from = square - 8, .to = square};
-    move_list_push(move_list, move);
-
-    uint64_t potential_double_push = 1ULL << (square + 8);
-
-    if ((potential_double_push & RANK_4_MASK & empty) != 0) {
-      move_t move = {.from = square - 8, .to = square + 8};
+      move_t move = {.from = square - 8, .to = square};
       move_list_push(move_list, move);
+
+      uint64_t potential_double_push = 1ULL << (square + 8);
+
+      if ((potential_double_push & RANK_4_MASK & empty) != 0) {
+        move_t move = {.from = square - 8, .to = square + 8};
+        move_list_push(move_list, move);
+      }
+    }
+  } else {
+    uint64_t push_destinations = (board->black_pawns >> 8) & empty;
+
+    bitboard_print(push_destinations, BLACK_PAWN);
+
+    while (push_destinations != 0) {
+      int square = bitboard_pop_bit(&push_destinations);
+
+      move_t move = {.from = square + 8, .to = square};
+      move_list_push(move_list, move);
+
+      uint64_t potential_double_push = 1ULL << (square - 8);
+
+      if ((potential_double_push & RANK_5_MASK & empty) != 0) {
+        move_t move = {.from = square + 8, .to = square - 8};
+        move_list_push(move_list, move);
+      }
     }
   }
 }
