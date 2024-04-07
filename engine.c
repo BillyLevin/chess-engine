@@ -57,6 +57,11 @@ typedef enum {
 } piece_t;
 
 typedef struct {
+  square_t from;
+  square_t to;
+} move_t;
+
+typedef struct {
   uint64_t white_pawns;
   uint64_t white_knights;
   uint64_t white_bishops;
