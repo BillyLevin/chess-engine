@@ -232,8 +232,10 @@ void board_print(board_t *board) {
 #define OPERA_GAME_FEN "1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 17"
 #define HIGH_HALFMOVE_FEN                                                      \
   "r1bq1rk1/ppp2pbp/2np1np1/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 20 11"
-#define PAWN_CAPTURES_FEN                                                      \
+#define PAWN_CAPTURES_WHITE_FEN                                                \
   "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
+#define PAWN_CAPTURES_BLACK_FEN                                                \
+  "rnbqkbnr/p1p1p3/3p3p/1p1p4/2P1Pp2/8/PP1P1PpP/RNBQKB1R b - e3 0 1"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -609,13 +611,13 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
         int attacked_square = bitboard_pop_bit(&attacks);
 
         if (is_promotion(attacked_square, BLACK)) {
-          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+          move_list_push(move_list, move_new(square + 8, attacked_square, true,
                                              BLACK_QUEEN));
-          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+          move_list_push(move_list, move_new(square + 8, attacked_square, true,
                                              BLACK_ROOK));
-          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+          move_list_push(move_list, move_new(square + 8, attacked_square, true,
                                              BLACK_BISHOP));
-          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+          move_list_push(move_list, move_new(square + 8, attacked_square, true,
                                              BLACK_KNIGHT));
         } else {
           move_list_push(move_list,
@@ -657,7 +659,7 @@ int main() {
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, PAWN_CAPTURES_FEN);
+  board_parse_FEN(board, PAWN_CAPTURES_BLACK_FEN);
   board_print(board);
 
   move_list_t *move_list = move_list_new();
