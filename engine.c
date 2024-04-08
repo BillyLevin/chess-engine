@@ -59,6 +59,7 @@ typedef enum {
 typedef struct {
   square_t from;
   square_t to;
+  bool is_capture;
 } move_t;
 
 typedef struct {
@@ -225,7 +226,7 @@ void board_print(board_t *board) {
 #define HIGH_HALFMOVE_FEN                                                      \
   "r1bq1rk1/ppp2pbp/2np1np1/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 20 11"
 #define PAWN_CAPTURES_FEN                                                      \
-  "rn1qkb1r/ppp1pppp/5n2/3p1b2/2B1P3/2N5/PPPP1PPP/R1BQK1NR w KQkq - 4 4"
+  "rn1qkb1r/ppp1pppp/5n2/3p1b2/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq - 4 4"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -482,6 +483,11 @@ int bitboard_pop_bit(uint64_t *bitboard) {
   return square;
 }
 
+move_t move_new(square_t from, square_t to, bool is_capture) {
+  move_t move = {.from = from, .to = to, .is_capture = is_capture};
+  return move;
+}
+
 move_list_t *move_list_new() {
   move_list_t *move_list = malloc(sizeof(move_list_t));
   return move_list;
@@ -497,13 +503,13 @@ void move_list_print(move_list_t *move_list) {
   for (size_t i = 0; i < move_list->count; i++) {
     move_t move = move_list->moves[i];
 
-    printf("From: %s, to: %s\n", SQUARE_TO_READABLE[move.from],
-           SQUARE_TO_READABLE[move.to]);
+    printf("From: %s, to: %s, capture: %s\n", SQUARE_TO_READABLE[move.from],
+           SQUARE_TO_READABLE[move.to], move.is_capture ? "true" : "false");
   }
   printf("\nTotal moves: %zu\n", move_list->count);
 }
 
-void generate_pawn_pushes(const board_t *board, move_list_t *move_list) {
+void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
   // each occupied square is set to `1`
   uint64_t empty = ~(board->occupancies[WHITE] | board->occupancies[BLACK]);
 
@@ -513,30 +519,43 @@ void generate_pawn_pushes(const board_t *board, move_list_t *move_list) {
     while (push_destinations != 0) {
       int square = bitboard_pop_bit(&push_destinations);
 
-      move_t move = {.from = square - 8, .to = square};
-      move_list_push(move_list, move);
+      move_list_push(move_list, move_new(square - 8, square, false));
 
       uint64_t potential_double_push = 1ULL << (square + 8);
 
       if ((potential_double_push & RANK_4_MASK & empty) != 0) {
-        move_t move = {.from = square - 8, .to = square + 8};
-        move_list_push(move_list, move);
+        move_list_push(move_list, move_new(square - 8, square + 8, false));
+      }
+
+      uint64_t attacks =
+          (PAWN_ATTACKS[WHITE][square - 8]) & (board->occupancies[BLACK]);
+
+      while (attacks != 0) {
+        int attacked_square = bitboard_pop_bit(&attacks);
+        move_list_push(move_list, move_new(square - 8, attacked_square, true));
       }
     }
+
   } else {
     uint64_t push_destinations = (board->black_pawns >> 8) & empty;
 
     while (push_destinations != 0) {
       int square = bitboard_pop_bit(&push_destinations);
 
-      move_t move = {.from = square + 8, .to = square};
-      move_list_push(move_list, move);
+      move_list_push(move_list, move_new(square + 8, square, false));
 
       uint64_t potential_double_push = 1ULL << (square - 8);
 
       if ((potential_double_push & RANK_5_MASK & empty) != 0) {
-        move_t move = {.from = square + 8, .to = square - 8};
-        move_list_push(move_list, move);
+        move_list_push(move_list, move_new(square + 8, square - 8, false));
+      }
+
+      uint64_t attacks =
+          (PAWN_ATTACKS[BLACK][square + 8]) & (board->occupancies[WHITE]);
+
+      while (attacks != 0) {
+        int attacked_square = bitboard_pop_bit(&attacks);
+        move_list_push(move_list, move_new(square + 8, attacked_square, true));
       }
     }
   }
@@ -580,7 +599,7 @@ int main() {
 
   move_list_t *move_list = move_list_new();
 
-  generate_pawn_pushes(board, move_list);
+  generate_pawn_moves(board, move_list);
 
   move_list_print(move_list);
 
