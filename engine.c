@@ -563,9 +563,7 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
 
 uint64_t generate_pawn_attack_mask(square_t square, side_t side) {
   uint64_t mask = 0ULL;
-  uint64_t bitboard = 0ULL;
-
-  bitboard |= (1ULL << square);
+  uint64_t bitboard = 1ULL << square;
 
   if (side == WHITE) {
     uint64_t east_attacks = (bitboard << 9) & NOT_A_FILE;
