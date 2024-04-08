@@ -518,10 +518,11 @@ void move_list_print(move_list_t *move_list) {
   for (size_t i = 0; i < move_list->count; i++) {
     move_t move = move_list->moves[i];
 
-    printf("From: %s, to: %s, capture: %s, promotion: %s\n",
+    printf("From: %s, to: %s, capture: %s, promotion: %s, en passant: %s\n",
            SQUARE_TO_READABLE[move.from], SQUARE_TO_READABLE[move.to],
            move.is_capture ? "true" : "false",
-           move.promotion == EMPTY ? "none" : PIECE_LETTER[move.promotion]);
+           move.promotion == EMPTY ? "none" : PIECE_LETTER[move.promotion],
+           move.is_en_passant ? "true" : "false");
   }
   printf("\nTotal moves: %zu\n", move_list->count);
 }
@@ -562,11 +563,16 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
                        move_new(square - 8, square + 8, false, EMPTY, false));
       }
 
-      uint64_t attacks =
-          (PAWN_ATTACKS[WHITE][square - 8]) & (board->occupancies[BLACK]);
+      uint64_t en_passant_bitboard = board->en_passant_square != NO_SQUARE
+                                         ? (1ULL << board->en_passant_square)
+                                         : 0ULL;
+
+      uint64_t enemy = board->occupancies[BLACK] | en_passant_bitboard;
+      uint64_t attacks = (PAWN_ATTACKS[WHITE][square - 8]) & enemy;
 
       while (attacks != 0) {
         int attacked_square = bitboard_pop_bit(&attacks);
+
         if (is_promotion(attacked_square, WHITE)) {
           move_list_push(move_list, move_new(square - 8, attacked_square, true,
                                              WHITE_QUEEN, false));
@@ -577,8 +583,9 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
           move_list_push(move_list, move_new(square - 8, attacked_square, true,
                                              WHITE_KNIGHT, false));
         } else {
-          move_list_push(move_list, move_new(square - 8, attacked_square, true,
-                                             EMPTY, false));
+          move_list_push(move_list,
+                         move_new(square - 8, attacked_square, true, EMPTY,
+                                  attacked_square == board->en_passant_square));
         }
       }
     }
@@ -665,7 +672,7 @@ int main() {
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, PAWN_CAPTURES_BLACK_FEN);
+  board_parse_FEN(board, PAWN_CAPTURES_WHITE_FEN);
   board_print(board);
 
   move_list_t *move_list = move_list_new();
