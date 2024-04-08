@@ -60,6 +60,7 @@ typedef struct {
   square_t from;
   square_t to;
   bool is_capture;
+  piece_t promotion;
 } move_t;
 
 typedef struct {
@@ -99,6 +100,9 @@ const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
                                    0x2655, 0x2654, 0x265F, 0x265E,
                                    0x265D, 0x265C, 0x265B, 0x265A};
 
+const char PIECE_LETTER[12][2] = {"P", "N", "B", "R", "Q", "K",
+                                  "p", "n", "b", "r", "q", "k"};
+
 const uint64_t RANK_4_MASK = 4278190080ULL;
 const uint64_t RANK_5_MASK = 1095216660480ULL;
 
@@ -106,6 +110,9 @@ const uint64_t NOT_A_FILE = 18374403900871474942ULL;
 const uint64_t NOT_H_FILE = 9187201950435737471ULL;
 
 uint64_t PAWN_ATTACKS[2][64];
+
+#define IS_RANK_1(sq) (sq >= 0 && sq <= 7)
+#define IS_RANK_8(sq) (sq >= 56 && sq <= 63)
 
 void piece_print(piece_t piece) {
   setlocale(LC_CTYPE, "");
@@ -226,7 +233,7 @@ void board_print(board_t *board) {
 #define HIGH_HALFMOVE_FEN                                                      \
   "r1bq1rk1/ppp2pbp/2np1np1/4p3/2B1P3/2NP1N2/PPP2PPP/R1BQ1RK1 w - - 20 11"
 #define PAWN_CAPTURES_FEN                                                      \
-  "rn1qkb1r/ppp1pppp/5n2/3p1b2/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq - 4 4"
+  "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -483,8 +490,10 @@ int bitboard_pop_bit(uint64_t *bitboard) {
   return square;
 }
 
-move_t move_new(square_t from, square_t to, bool is_capture) {
-  move_t move = {.from = from, .to = to, .is_capture = is_capture};
+move_t move_new(square_t from, square_t to, bool is_capture,
+                piece_t promotion) {
+  move_t move = {
+      .from = from, .to = to, .is_capture = is_capture, .promotion = promotion};
   return move;
 }
 
@@ -503,10 +512,17 @@ void move_list_print(move_list_t *move_list) {
   for (size_t i = 0; i < move_list->count; i++) {
     move_t move = move_list->moves[i];
 
-    printf("From: %s, to: %s, capture: %s\n", SQUARE_TO_READABLE[move.from],
-           SQUARE_TO_READABLE[move.to], move.is_capture ? "true" : "false");
+    printf("From: %s, to: %s, capture: %s, promotion: %s\n",
+           SQUARE_TO_READABLE[move.from], SQUARE_TO_READABLE[move.to],
+           move.is_capture ? "true" : "false",
+           move.promotion == EMPTY ? "none" : PIECE_LETTER[move.promotion]);
   }
   printf("\nTotal moves: %zu\n", move_list->count);
+}
+
+bool is_promotion(square_t destination, side_t side) {
+  return (side == WHITE && IS_RANK_8(destination)) ||
+         (side == BLACK && IS_RANK_1(destination));
 }
 
 void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
@@ -519,12 +535,24 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
     while (push_destinations != 0) {
       int square = bitboard_pop_bit(&push_destinations);
 
-      move_list_push(move_list, move_new(square - 8, square, false));
+      if (is_promotion(square, WHITE)) {
+        move_list_push(move_list,
+                       move_new(square - 8, square, false, WHITE_QUEEN));
+        move_list_push(move_list,
+                       move_new(square - 8, square, false, WHITE_ROOK));
+        move_list_push(move_list,
+                       move_new(square - 8, square, false, WHITE_BISHOP));
+        move_list_push(move_list,
+                       move_new(square - 8, square, false, WHITE_KNIGHT));
+      } else {
+        move_list_push(move_list, move_new(square - 8, square, false, EMPTY));
+      }
 
       uint64_t potential_double_push = 1ULL << (square + 8);
 
       if ((potential_double_push & RANK_4_MASK & empty) != 0) {
-        move_list_push(move_list, move_new(square - 8, square + 8, false));
+        move_list_push(move_list,
+                       move_new(square - 8, square + 8, false, EMPTY));
       }
 
       uint64_t attacks =
@@ -532,7 +560,19 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
 
       while (attacks != 0) {
         int attacked_square = bitboard_pop_bit(&attacks);
-        move_list_push(move_list, move_new(square - 8, attacked_square, true));
+        if (is_promotion(attacked_square, WHITE)) {
+          move_list_push(move_list, move_new(square - 8, attacked_square, true,
+                                             WHITE_QUEEN));
+          move_list_push(move_list, move_new(square - 8, attacked_square, true,
+                                             WHITE_ROOK));
+          move_list_push(move_list, move_new(square - 8, attacked_square, true,
+                                             WHITE_BISHOP));
+          move_list_push(move_list, move_new(square - 8, attacked_square, true,
+                                             WHITE_KNIGHT));
+        } else {
+          move_list_push(move_list,
+                         move_new(square - 8, attacked_square, true, EMPTY));
+        }
       }
     }
 
@@ -542,12 +582,24 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
     while (push_destinations != 0) {
       int square = bitboard_pop_bit(&push_destinations);
 
-      move_list_push(move_list, move_new(square + 8, square, false));
+      if (is_promotion(square, BLACK)) {
+        move_list_push(move_list,
+                       move_new(square + 8, square, false, BLACK_QUEEN));
+        move_list_push(move_list,
+                       move_new(square + 8, square, false, BLACK_ROOK));
+        move_list_push(move_list,
+                       move_new(square + 8, square, false, BLACK_BISHOP));
+        move_list_push(move_list,
+                       move_new(square + 8, square, false, BLACK_KNIGHT));
+      } else {
+        move_list_push(move_list, move_new(square + 8, square, false, EMPTY));
+      }
 
       uint64_t potential_double_push = 1ULL << (square - 8);
 
       if ((potential_double_push & RANK_5_MASK & empty) != 0) {
-        move_list_push(move_list, move_new(square + 8, square - 8, false));
+        move_list_push(move_list,
+                       move_new(square + 8, square - 8, false, EMPTY));
       }
 
       uint64_t attacks =
@@ -555,7 +607,20 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
 
       while (attacks != 0) {
         int attacked_square = bitboard_pop_bit(&attacks);
-        move_list_push(move_list, move_new(square + 8, attacked_square, true));
+
+        if (is_promotion(attacked_square, BLACK)) {
+          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+                                             BLACK_QUEEN));
+          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+                                             BLACK_ROOK));
+          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+                                             BLACK_BISHOP));
+          move_list_push(move_list, move_new(square + 8, attacked_square, false,
+                                             BLACK_KNIGHT));
+        } else {
+          move_list_push(move_list,
+                         move_new(square + 8, attacked_square, true, EMPTY));
+        }
       }
     }
   }
