@@ -617,8 +617,13 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
                        move_new(square + 8, square - 8, false, EMPTY, false));
       }
 
-      uint64_t attacks =
-          (PAWN_ATTACKS[BLACK][square + 8]) & (board->occupancies[WHITE]);
+      uint64_t en_passant_bitboard = board->en_passant_square != NO_SQUARE
+                                         ? (1ULL << board->en_passant_square)
+                                         : 0ULL;
+
+      uint64_t enemy = board->occupancies[WHITE] | en_passant_bitboard;
+
+      uint64_t attacks = (PAWN_ATTACKS[BLACK][square + 8]) & enemy;
 
       while (attacks != 0) {
         int attacked_square = bitboard_pop_bit(&attacks);
@@ -633,8 +638,9 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
           move_list_push(move_list, move_new(square + 8, attacked_square, true,
                                              BLACK_KNIGHT, false));
         } else {
-          move_list_push(move_list, move_new(square + 8, attacked_square, true,
-                                             EMPTY, false));
+          move_list_push(move_list,
+                         move_new(square + 8, attacked_square, true, EMPTY,
+                                  attacked_square == board->en_passant_square));
         }
       }
     }
@@ -672,7 +678,7 @@ int main() {
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, PAWN_CAPTURES_WHITE_FEN);
+  board_parse_FEN(board, PAWN_CAPTURES_BLACK_FEN);
   board_print(board);
 
   move_list_t *move_list = move_list_new();
