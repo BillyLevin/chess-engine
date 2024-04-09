@@ -240,6 +240,7 @@ void board_print(board_t *board) {
   "rnbqkb1r/pp1p1pPp/8/2p1pP2/1P1P4/3P3P/P1P1P3/RNBQKBNR w KQkq e6 0 1"
 #define PAWN_CAPTURES_BLACK_FEN                                                \
   "rnbqkbnr/p1p1p3/3p3p/1p1p4/2P1Pp2/8/PP1P1PpP/RNBQKB1R b - e3 0 1"
+#define KNIGHT_MOVES_FEN "5k2/1n6/4n3/6N1/8/3N4/8/5K2 b - - 0 1"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -650,7 +651,31 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
   }
 }
 
-void generate_knight_moves(const board_t *board, move_list_t *move_list) {}
+void generate_knight_moves(const board_t *board, move_list_t *move_list) {
+  uint64_t knights =
+      board->side == WHITE ? board->white_knights : board->black_knights;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  while (knights != 0) {
+    square_t from_square = bitboard_pop_bit(&knights);
+
+    uint64_t knight_moves =
+        (KNIGHT_ATTACKS[from_square]) & ~current_side_occupancy;
+
+    while (knight_moves != 0) {
+      square_t to_square = bitboard_pop_bit(&knight_moves);
+
+      bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+      move_list_push(move_list, move_new(from_square, to_square, is_capture,
+                                         EMPTY, false));
+    }
+  }
+}
 
 uint64_t generate_pawn_attack_mask(square_t square, side_t side) {
   uint64_t mask = 0ULL;
@@ -712,16 +737,16 @@ void init_attack_masks() {
 
 int main() {
   init_attack_masks();
-  return 0;
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, PAWN_CAPTURES_BLACK_FEN);
+  board_parse_FEN(board, KNIGHT_MOVES_FEN);
   board_print(board);
 
   move_list_t *move_list = move_list_new();
 
   generate_pawn_moves(board, move_list);
+  generate_knight_moves(board, move_list);
 
   move_list_print(move_list);
 
