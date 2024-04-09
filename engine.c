@@ -109,8 +109,11 @@ const uint64_t RANK_5_MASK = 1095216660480ULL;
 
 const uint64_t NOT_A_FILE = 18374403900871474942ULL;
 const uint64_t NOT_H_FILE = 9187201950435737471ULL;
+const uint64_t NOT_AB_FILE = 18229723555195321596ULL;
+const uint64_t NOT_GH_FILE = 4557430888798830399ULL;
 
 uint64_t PAWN_ATTACKS[2][64];
+uint64_t KNIGHT_ATTACKS[64];
 
 #define IS_RANK_1(sq) (sq >= 0 && sq <= 7)
 #define IS_RANK_8(sq) (sq >= 56 && sq <= 63)
@@ -647,6 +650,8 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
   }
 }
 
+void generate_knight_moves(const board_t *board, move_list_t *move_list) {}
+
 uint64_t generate_pawn_attack_mask(square_t square, side_t side) {
   uint64_t mask = 0ULL;
   uint64_t bitboard = 1ULL << square;
@@ -666,15 +671,48 @@ uint64_t generate_pawn_attack_mask(square_t square, side_t side) {
   return mask;
 }
 
-void init_pawn_attack_masks() {
+uint64_t generate_knight_attack_mask(square_t square) {
+  uint64_t mask = 0ULL;
+  uint64_t bitboard = 1ULL << square;
+
+  uint64_t north_north_east = (bitboard << 17) & NOT_A_FILE;
+  mask |= north_north_east;
+
+  uint64_t north_east_east = (bitboard << 10) & NOT_AB_FILE;
+  mask |= north_east_east;
+
+  uint64_t south_east_east = (bitboard >> 6) & NOT_AB_FILE;
+  mask |= south_east_east;
+
+  uint64_t south_south_east = (bitboard >> 15) & NOT_A_FILE;
+  mask |= south_south_east;
+
+  uint64_t north_north_west = (bitboard << 15) & NOT_H_FILE;
+  mask |= north_north_west;
+
+  uint64_t north_west_west = (bitboard << 6) & NOT_GH_FILE;
+  mask |= north_west_west;
+
+  uint64_t south_west_west = (bitboard >> 10) & NOT_GH_FILE;
+  mask |= south_west_west;
+
+  uint64_t south_south_west = (bitboard >> 17) & NOT_H_FILE;
+  mask |= south_south_west;
+
+  return mask;
+}
+
+void init_attack_masks() {
   for (int i = 0; i < 64; i++) {
     PAWN_ATTACKS[WHITE][i] = generate_pawn_attack_mask(i, WHITE);
     PAWN_ATTACKS[BLACK][i] = generate_pawn_attack_mask(i, BLACK);
+    KNIGHT_ATTACKS[i] = generate_knight_attack_mask(i);
   }
 }
 
 int main() {
-  init_pawn_attack_masks();
+  init_attack_masks();
+  return 0;
 
   board_t *board = board_new();
 
