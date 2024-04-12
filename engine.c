@@ -727,6 +727,63 @@ uint64_t generate_knight_attack_mask(square_t square) {
   return mask;
 }
 
+uint64_t generate_rook_attack_mask(square_t square) {
+  uint64_t mask = 0ULL;
+
+  int start_rank = square / 8;
+  int start_file = square % 8;
+
+  for (int rank = start_rank + 1; rank < 7; rank++) {
+    mask |= 1ULL << ((rank * 8) + start_file);
+  }
+
+  for (int rank = start_rank - 1; rank > 0; rank--) {
+    mask |= 1ULL << ((rank * 8) + start_file);
+  }
+
+  for (int file = start_file + 1; file < 7; file++) {
+    mask |= 1ULL << ((start_rank * 8) + file);
+  }
+
+  for (int file = start_file - 1; file > 0; file--) {
+    mask |= 1ULL << ((start_rank * 8) + file);
+  }
+
+  return mask;
+}
+
+uint64_t generate_bishop_attack_mask(square_t square) {
+  uint64_t mask = 0ULL;
+
+  int start_rank = square / 8;
+  int start_file = square % 8;
+
+  int rank;
+  int file;
+
+  for (rank = start_rank + 1, file = start_file + 1; rank < 7 && file < 7;
+       rank++, file++) {
+    mask |= 1ULL << ((rank * 8) + file);
+  }
+
+  for (rank = start_rank + 1, file = start_file - 1; rank < 7 && file > 0;
+       rank++, file--) {
+    mask |= 1ULL << ((rank * 8) + file);
+  }
+
+  for (rank = start_rank - 1, file = start_file + 1; rank > 0 && file < 7;
+       rank--, file++) {
+    mask |= 1ULL << ((rank * 8) + file);
+  }
+
+  for (rank = start_rank - 1, file = start_file - 1; rank > 0 && file > 0;
+       rank--, file--) {
+    mask |= 1ULL << ((rank * 8) + file);
+  }
+
+  return mask;
+}
+
 void init_attack_masks() {
   for (int i = 0; i < 64; i++) {
     PAWN_ATTACKS[WHITE][i] = generate_pawn_attack_mask(i, WHITE);
