@@ -727,7 +727,7 @@ uint64_t generate_knight_attack_mask(square_t square) {
   return mask;
 }
 
-uint64_t generate_rook_attack_mask(square_t square) {
+uint64_t generate_rook_blocker_mask(square_t square) {
   uint64_t mask = 0ULL;
 
   int start_rank = square / 8;
@@ -752,7 +752,7 @@ uint64_t generate_rook_attack_mask(square_t square) {
   return mask;
 }
 
-uint64_t generate_bishop_attack_mask(square_t square) {
+uint64_t generate_bishop_blocker_mask(square_t square) {
   uint64_t mask = 0ULL;
 
   int start_rank = square / 8;
