@@ -168,6 +168,37 @@ const uint64_t BISHOP_MAGICS[64] = {
     0x2004012a040132ULL,
 };
 
+const size_t ROOK_OFFSETS[64] = {
+    0,     4096,  6144,  8192,  10240, 12288, 14336, 16384, 20480, 22528, 23552,
+    24576, 25600, 26624, 27648, 28672, 30720, 32768, 33792, 34816, 35840, 36864,
+    37888, 38912, 40960, 43008, 44032, 45056, 46080, 47104, 48128, 49152, 51200,
+    53248, 54272, 55296, 56320, 57344, 58368, 59392, 61440, 63488, 64512, 65536,
+    66560, 67584, 68608, 69632, 71680, 73728, 74752, 75776, 76800, 77824, 78848,
+    79872, 81920, 86016, 88064, 90112, 92160, 94208, 96256, 98304,
+};
+
+const size_t BISHOP_OFFSETS[64] = {
+    0,    64,   96,   128,  160,  192,  224,  256,  320,  352,  384,
+    416,  448,  480,  512,  544,  576,  608,  640,  768,  896,  1024,
+    1152, 1184, 1216, 1248, 1280, 1408, 1920, 2432, 2560, 2592, 2624,
+    2656, 2688, 2816, 3328, 3840, 3968, 4000, 4032, 4064, 4096, 4224,
+    4352, 4480, 4608, 4640, 4672, 4704, 4736, 4768, 4800, 4832, 4864,
+    4896, 4928, 4992, 5024, 5056, 5088, 5120, 5152, 5184,
+};
+
+const uint8_t ROOK_RELEVANT_BITS[64] = {
+    12, 11, 11, 11, 11, 11, 11, 12, 11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 11,
+    11, 10, 10, 10, 10, 10, 10, 11, 12, 11, 11, 11, 11, 11, 11, 12,
+};
+
+const uint8_t BISHOP_RELEVANT_BITS[64] = {
+    6, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7,
+    5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 9, 9, 7, 5, 5, 5, 5, 7, 7,
+    7, 7, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 5, 5, 5, 5, 5, 5, 6,
+};
+
 uint64_t ROOK_ATTACK_TABLE[102400];
 uint64_t BISHOP_ATTACK_TABLE[5248];
 
@@ -837,11 +868,140 @@ uint64_t generate_bishop_blocker_mask(square_t square) {
   return mask;
 }
 
+uint64_t generate_rook_attack_mask(int square, uint64_t blockers) {
+  uint64_t mask = 0ULL;
+
+  int start_rank = square / 8;
+  int start_file = square % 8;
+
+  for (int rank = start_rank + 1; rank < 8; rank++) {
+    mask |= 1ULL << ((rank * 8) + start_file);
+    if (blockers & (1ULL << ((rank * 8) + start_file))) {
+      break;
+    }
+  }
+
+  for (int rank = start_rank - 1; rank >= 0; rank--) {
+    mask |= 1ULL << ((rank * 8) + start_file);
+    if (blockers & (1ULL << ((rank * 8) + start_file))) {
+      break;
+    }
+  }
+
+  for (int file = start_file + 1; file < 8; file++) {
+    mask |= 1ULL << ((start_rank * 8) + file);
+    if (blockers & (1ULL << ((start_rank * 8) + file))) {
+      break;
+    }
+  }
+
+  for (int file = start_file - 1; file >= 0; file--) {
+    mask |= 1ULL << ((start_rank * 8) + file);
+    if (blockers & (1ULL << ((start_rank * 8) + file))) {
+      break;
+    }
+  }
+
+  return mask;
+}
+
+uint64_t generate_bishop_attack_mask(int square, uint64_t blockers) {
+  uint64_t mask = 0ULL;
+
+  int start_rank = square / 8;
+  int start_file = square % 8;
+
+  int rank;
+  int file;
+
+  for (rank = start_rank + 1, file = start_file + 1; rank < 8 && file < 8;
+       rank++, file++) {
+    mask |= 1ULL << ((rank * 8) + file);
+    if (blockers & (1ULL << ((rank * 8) + file))) {
+      break;
+    }
+  }
+
+  for (rank = start_rank + 1, file = start_file - 1; rank < 8 && file >= 0;
+       rank++, file--) {
+    mask |= 1ULL << ((rank * 8) + file);
+    if (blockers & (1ULL << ((rank * 8) + file))) {
+      break;
+    }
+  }
+
+  for (rank = start_rank - 1, file = start_file + 1; rank >= 0 && file < 8;
+       rank--, file++) {
+    mask |= 1ULL << ((rank * 8) + file);
+    if (blockers & (1ULL << ((rank * 8) + file))) {
+      break;
+    }
+  }
+
+  for (rank = start_rank - 1, file = start_file - 1; rank >= 0 && file >= 0;
+       rank--, file--) {
+    mask |= 1ULL << ((rank * 8) + file);
+    if (blockers & (1ULL << ((rank * 8) + file))) {
+      break;
+    }
+  }
+
+  return mask;
+}
+
+size_t get_magic_index(uint64_t magic, uint64_t mask, uint64_t current_blockers,
+                       uint8_t shift, size_t offset) {
+  uint64_t blockers = current_blockers & mask;
+  uint64_t hash = magic * blockers;
+  return (hash >> shift) + offset;
+}
+
+void add_rook_attack_table_entries(int square) {
+  uint64_t mask = generate_rook_blocker_mask(square);
+  uint64_t magic = ROOK_MAGICS[square];
+  uint64_t blockers = 0ULL;
+
+  while (true) {
+    uint64_t moves = generate_rook_attack_mask(square, blockers);
+    size_t magic_index =
+        get_magic_index(magic, mask, blockers, 64 - ROOK_RELEVANT_BITS[square],
+                        ROOK_OFFSETS[square]);
+    ROOK_ATTACK_TABLE[magic_index] = moves;
+
+    blockers = (blockers - mask) & mask;
+    if (blockers == 0) {
+      break;
+    }
+  }
+}
+
+void add_bishop_attack_table_entries(int square) {
+  uint64_t mask = generate_bishop_blocker_mask(square);
+  uint64_t magic = BISHOP_MAGICS[square];
+  uint64_t blockers = 0ULL;
+
+  while (true) {
+    uint64_t moves = generate_bishop_attack_mask(square, blockers);
+    size_t magic_index = get_magic_index(magic, mask, blockers,
+                                         64 - BISHOP_RELEVANT_BITS[square],
+                                         BISHOP_OFFSETS[square]);
+    BISHOP_ATTACK_TABLE[magic_index] = moves;
+
+    blockers = (blockers - mask) & mask;
+    if (blockers == 0) {
+      break;
+    }
+  }
+}
+
 void init_attack_masks() {
-  for (int i = 0; i < 64; i++) {
-    PAWN_ATTACKS[WHITE][i] = generate_pawn_attack_mask(i, WHITE);
-    PAWN_ATTACKS[BLACK][i] = generate_pawn_attack_mask(i, BLACK);
-    KNIGHT_ATTACKS[i] = generate_knight_attack_mask(i);
+  for (int square = 0; square < 64; square++) {
+    PAWN_ATTACKS[WHITE][square] = generate_pawn_attack_mask(square, WHITE);
+    PAWN_ATTACKS[BLACK][square] = generate_pawn_attack_mask(square, BLACK);
+    KNIGHT_ATTACKS[square] = generate_knight_attack_mask(square);
+
+    add_rook_attack_table_entries(square);
+    add_bishop_attack_table_entries(square);
   }
 }
 
