@@ -239,15 +239,20 @@ found_magic_t find_magic(int square, piece_t piece) {
 }
 
 void print_magics(piece_t piece) {
+  printf("const uint64_t %s_MAGICS[64] = {\n",
+         piece == ROOK ? "ROOK" : "BISHOP");
+
   size_t total_size = 0;
   for (int square = 0; square < 64; square++) {
     found_magic_t found_magic = find_magic(square, piece);
-    printf("Magic: 0x%lx, table_size: %zu\n", found_magic.magic,
-           found_magic.table_length);
+    printf("  0x%lxULL,\n", found_magic.magic);
     total_size += found_magic.table_length;
   }
 
-  printf("TOTAL SIZE: %zu\n", total_size);
+  printf("};\n\n");
+
+  printf("const size_t %s_ATTACK_TABLE_SIZE = %zu;\n\n",
+         piece == ROOK ? "ROOK" : "BISHOP", total_size);
 }
 
 int main() {
