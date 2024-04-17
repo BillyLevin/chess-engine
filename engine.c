@@ -325,6 +325,9 @@ void board_print(board_t *board) {
 #define PAWN_CAPTURES_BLACK_FEN                                                \
   "rnbqkbnr/p1p1p3/3p3p/1p1p4/2P1Pp2/8/PP1P1PpP/RNBQKB1R b - e3 0 1"
 #define KNIGHT_MOVES_FEN "5k2/1n6/4n3/6N1/8/3N4/8/5K2 b - - 0 1"
+#define BISHOP_MOVES_FEN "6k1/1b6/4n2P/8/1n4B1/1B3N2/1N6/2b2K1 b - - 0 1"
+#define ROOK_MOVES_FEN "6k1/8/5r2/8/1nR5/5N2/8/6K1 b - - 0 1"
+#define QUEEN_MOVES_FEN "6k1/8/4nq2/8/1nQ5/5N2/1N6/6k1 b - - 0 1"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -1005,18 +1008,55 @@ void init_attack_masks() {
   }
 }
 
+uint64_t get_bishop_attacks(int square, uint64_t blockers) {
+  size_t magic_index = get_magic_index(
+      BISHOP_MAGICS[square], generate_bishop_blocker_mask(square), blockers,
+      64 - BISHOP_RELEVANT_BITS[square], BISHOP_OFFSETS[square]);
+
+  return BISHOP_ATTACK_TABLE[magic_index];
+}
+
+void generate_bishop_moves(const board_t *board, move_list_t *move_list) {
+  uint64_t bishops =
+      board->side == WHITE ? board->white_bishops : board->black_bishops;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  while (bishops != 0) {
+    square_t from_square = bitboard_pop_bit(&bishops);
+
+    uint64_t bishop_moves =
+        (get_bishop_attacks(from_square,
+                            current_side_occupancy | enemy_occupancy)) &
+        ~current_side_occupancy;
+
+    while (bishop_moves != 0) {
+      square_t to_square = bitboard_pop_bit(&bishop_moves);
+
+      bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+      move_list_push(move_list, move_new(from_square, to_square, is_capture,
+                                         EMPTY, false));
+    }
+  }
+}
+
 int main() {
   init_attack_masks();
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, KNIGHT_MOVES_FEN);
+  board_parse_FEN(board, BISHOP_MOVES_FEN);
   board_print(board);
 
   move_list_t *move_list = move_list_new();
 
   generate_pawn_moves(board, move_list);
   generate_knight_moves(board, move_list);
+  generate_bishop_moves(board, move_list);
 
   move_list_print(move_list);
 
