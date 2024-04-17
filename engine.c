@@ -327,7 +327,7 @@ void board_print(board_t *board) {
 #define KNIGHT_MOVES_FEN "5k2/1n6/4n3/6N1/8/3N4/8/5K2 b - - 0 1"
 #define BISHOP_MOVES_FEN "6k1/1b6/4n2P/8/1n4B1/1B3N2/1N6/2b2K1 b - - 0 1"
 #define ROOK_MOVES_FEN "6k1/8/5r1p/8/1nR5/5N2/8/6K1 b - - 0 1"
-#define QUEEN_MOVES_FEN "6k1/8/4nq2/8/1nQ5/5N2/1N6/6k1 b - - 0 1"
+#define QUEEN_MOVES_FEN "6k1/7P/4nq2/8/1nQ5/5N2/1N6/6K1 b - - 0 1"
 
 void board_insert_piece(board_t *board, const piece_t piece, const int square) {
   switch (piece) {
@@ -1121,6 +1121,41 @@ void generate_queen_moves(const board_t *board, move_list_t *move_list) {
   }
 }
 
+uint64_t east_one(uint64_t bits) { return (bits << 1) & NOT_A_FILE; }
+uint64_t west_one(uint64_t bits) { return (bits >> 1) & NOT_H_FILE; }
+uint64_t north_one(uint64_t bits) { return bits << 8; }
+uint64_t south_one(uint64_t bits) { return bits >> 8; }
+
+uint64_t get_king_attacks(uint64_t king_bitboard) {
+  uint64_t attacks = east_one(king_bitboard) | west_one(king_bitboard);
+  king_bitboard |= attacks;
+  attacks |= north_one(king_bitboard) | south_one(king_bitboard);
+  return attacks;
+}
+
+void generate_king_moves(const board_t *board, move_list_t *move_list) {
+  uint64_t king = board->side == WHITE ? board->white_king : board->black_king;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  uint64_t king_moves = get_king_attacks(king) & ~current_side_occupancy;
+  bitboard_print(king_moves, BLACK_KING);
+
+  square_t from_square = bitboard_pop_bit(&king);
+
+  while (king_moves != 0) {
+    square_t to_square = bitboard_pop_bit(&king_moves);
+
+    bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+    move_list_push(move_list,
+                   move_new(from_square, to_square, is_capture, EMPTY, false));
+  }
+}
+
 int main() {
   init_attack_masks();
 
@@ -1136,6 +1171,7 @@ int main() {
   generate_bishop_moves(board, move_list);
   generate_rook_moves(board, move_list);
   generate_queen_moves(board, move_list);
+  generate_king_moves(board, move_list);
 
   move_list_print(move_list);
 
