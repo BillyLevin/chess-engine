@@ -114,6 +114,7 @@ const uint64_t NOT_GH_FILE = 4557430888798830399ULL;
 
 uint64_t PAWN_ATTACKS[2][64];
 uint64_t KNIGHT_ATTACKS[64];
+uint64_t KING_ATTACKS[64];
 
 #define IS_RANK_1(sq) (sq >= 0 && sq <= 7)
 #define IS_RANK_8(sq) (sq >= 56 && sq <= 63)
@@ -814,6 +815,19 @@ uint64_t generate_knight_attack_mask(square_t square) {
   return mask;
 }
 
+uint64_t east_one(uint64_t bits) { return (bits << 1) & NOT_A_FILE; }
+uint64_t west_one(uint64_t bits) { return (bits >> 1) & NOT_H_FILE; }
+uint64_t north_one(uint64_t bits) { return bits << 8; }
+uint64_t south_one(uint64_t bits) { return bits >> 8; }
+
+uint64_t generate_king_attack_mask(int square) {
+  uint64_t king_bitboard = 1ULL << square;
+  uint64_t attacks = east_one(king_bitboard) | west_one(king_bitboard);
+  king_bitboard |= attacks;
+  attacks |= north_one(king_bitboard) | south_one(king_bitboard);
+  return attacks;
+}
+
 uint64_t generate_rook_blocker_mask(square_t square) {
   uint64_t mask = 0ULL;
 
@@ -1002,6 +1016,7 @@ void init_attack_masks() {
     PAWN_ATTACKS[WHITE][square] = generate_pawn_attack_mask(square, WHITE);
     PAWN_ATTACKS[BLACK][square] = generate_pawn_attack_mask(square, BLACK);
     KNIGHT_ATTACKS[square] = generate_knight_attack_mask(square);
+    KING_ATTACKS[square] = generate_king_attack_mask(square);
 
     add_rook_attack_table_entries(square);
     add_bishop_attack_table_entries(square);
@@ -1121,18 +1136,6 @@ void generate_queen_moves(const board_t *board, move_list_t *move_list) {
   }
 }
 
-uint64_t east_one(uint64_t bits) { return (bits << 1) & NOT_A_FILE; }
-uint64_t west_one(uint64_t bits) { return (bits >> 1) & NOT_H_FILE; }
-uint64_t north_one(uint64_t bits) { return bits << 8; }
-uint64_t south_one(uint64_t bits) { return bits >> 8; }
-
-uint64_t get_king_attacks(uint64_t king_bitboard) {
-  uint64_t attacks = east_one(king_bitboard) | west_one(king_bitboard);
-  king_bitboard |= attacks;
-  attacks |= north_one(king_bitboard) | south_one(king_bitboard);
-  return attacks;
-}
-
 void generate_king_moves(const board_t *board, move_list_t *move_list) {
   uint64_t king = board->side == WHITE ? board->white_king : board->black_king;
 
@@ -1141,10 +1144,9 @@ void generate_king_moves(const board_t *board, move_list_t *move_list) {
   uint64_t current_side_occupancy = board->occupancies[current_side];
   uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
 
-  uint64_t king_moves = get_king_attacks(king) & ~current_side_occupancy;
-  bitboard_print(king_moves, BLACK_KING);
-
   square_t from_square = bitboard_pop_bit(&king);
+
+  uint64_t king_moves = KING_ATTACKS[from_square] & ~current_side_occupancy;
 
   while (king_moves != 0) {
     square_t to_square = bitboard_pop_bit(&king_moves);
