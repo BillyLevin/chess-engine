@@ -93,9 +93,11 @@ typedef struct {
 
   side_t side;
 
-  int castle_rights;
+  uint8_t castle_rights;
 
   square_t en_passant_square;
+
+  uint64_t hash;
 } board_t;
 
 const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
@@ -225,6 +227,48 @@ uint64_t prng_generate_random(prng_t *prng) {
   return result * UINT64_C(2685821657736338717);
 }
 
+// random numbers to be used for zobrist hashing
+// 12 * 64 = 768 for the pieces
+// + 1 for current side to move being black
+// + 16 for castling rights
+// + 8 for en passant files (only need the file because column is unique
+// depending on white or black to move)
+// = 793 numbers total
+// https://www.chessprogramming.org/Zobrist_Hashing
+uint64_t ZOBRIST_HASH_NUMBERS[793];
+
+void init_zobrist_hash() {
+  prng_t prng = prng_new(123);
+
+  for (int i = 0; i < 793; i++) {
+    ZOBRIST_HASH_NUMBERS[i] = prng_generate_random(&prng);
+  }
+}
+
+uint64_t generate_hash(const board_t *board) {
+  uint64_t hash = 0ULL;
+
+  for (int square = 0; square < 64; square++) {
+    piece_t piece = board->pieces[square];
+
+    if (piece != EMPTY) {
+      hash ^= ZOBRIST_HASH_NUMBERS[(square * 12) + piece];
+    }
+  }
+
+  if (board->side == BLACK) {
+    hash ^= ZOBRIST_HASH_NUMBERS[768];
+  }
+
+  hash ^= ZOBRIST_HASH_NUMBERS[769 + board->castle_rights];
+
+  if (board->en_passant_square != NO_SQUARE) {
+    hash ^= ZOBRIST_HASH_NUMBERS[769 + 16 + board->en_passant_square % 8];
+  }
+
+  return hash;
+}
+
 void piece_print(piece_t piece) {
   setlocale(LC_CTYPE, "");
   printf("  %lc", PIECE_UNICODE[piece]);
@@ -252,9 +296,9 @@ void bitboard_print(uint64_t bitboard, piece_t piece) {
   }
 
   printf("   ");
-  char ranks[8] = "abcdefgh";
+  char files[8] = "abcdefgh";
   for (int i = 0; i < 8; i++) {
-    printf("%3c", ranks[i]);
+    printf("%3c", files[i]);
   }
   printf("\nRaw value: %lu\n\n", bitboard);
 };
@@ -280,6 +324,7 @@ board_t *board_new() {
   board->side = WHITE;
   board->castle_rights = 0;
   board->en_passant_square = NO_SQUARE;
+  board->hash = 0ULL;
 
   for (int i = 0; i < 64; i++) {
     board->pieces[i] = EMPTY;
@@ -335,6 +380,7 @@ void board_print(board_t *board) {
          board->en_passant_square == NO_SQUARE
              ? "-"
              : SQUARE_TO_READABLE[board->en_passant_square]);
+  printf("Hash: 0x%luULL\n", board->hash);
 }
 
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -592,6 +638,8 @@ bool board_parse_FEN(board_t *board, char *fen) {
   }
 
   board->halfmove_clock = strtol(halfmoves, NULL, 10);
+
+  board->hash = generate_hash(board);
   return true;
 }
 
@@ -1304,6 +1352,7 @@ void generate_castling_moves(const board_t *board, move_list_t *move_list) {
 
 int main() {
   init_attack_masks();
+  init_zobrist_hash();
 
   board_t *board = board_new();
 
