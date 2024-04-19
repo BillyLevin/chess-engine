@@ -204,6 +204,27 @@ const uint8_t BISHOP_RELEVANT_BITS[64] = {
 uint64_t ROOK_ATTACK_TABLE[102400];
 uint64_t BISHOP_ATTACK_TABLE[5248];
 
+typedef struct {
+  uint64_t state;
+} prng_t;
+
+prng_t prng_new(uint64_t seed) {
+  prng_t prng = {.state = seed};
+  return prng;
+}
+
+// https://en.wikipedia.org/wiki/Xorshift
+uint64_t prng_generate_random(prng_t *prng) {
+  uint64_t result = prng->state;
+
+  result ^= result >> 12;
+  result ^= result << 25;
+  result ^= result >> 27;
+
+  prng->state = result;
+  return result * UINT64_C(2685821657736338717);
+}
+
 void piece_print(piece_t piece) {
   setlocale(LC_CTYPE, "");
   printf("  %lc", PIECE_UNICODE[piece]);
