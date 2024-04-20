@@ -245,6 +245,147 @@ void init_zobrist_hash() {
   }
 }
 
+uint64_t zobrist_piece(int square, piece_t piece) {
+  return ZOBRIST_HASH_NUMBERS[(square * 12) + piece];
+}
+
+uint64_t zobrist_current_side() { return ZOBRIST_HASH_NUMBERS[768]; }
+
+uint64_t zobrist_castle(uint8_t castle_rights) {
+  return ZOBRIST_HASH_NUMBERS[769 + castle_rights];
+}
+
+uint64_t zobrist_en_passant_file(int en_passant_square) {
+  return ZOBRIST_HASH_NUMBERS[769 + 16 + (en_passant_square / 8)];
+}
+
+uint64_t zobrist_remove_piece(board_t *board, int square) {
+  piece_t piece = board->pieces[square];
+
+  uint64_t hash = zobrist_piece(square, piece);
+
+  uint64_t clear_bitmask = ~(1ULL << square);
+
+  switch (piece) {
+  case WHITE_PAWN:
+    board->white_pawns &= clear_bitmask;
+    board->occupancies[WHITE] &= clear_bitmask;
+    break;
+  case WHITE_KNIGHT:
+    board->white_knights &= clear_bitmask;
+    board->occupancies[WHITE] &= clear_bitmask;
+    break;
+  case WHITE_BISHOP:
+    board->white_bishops &= clear_bitmask;
+    board->occupancies[WHITE] &= clear_bitmask;
+    break;
+  case WHITE_ROOK:
+    board->white_rooks &= clear_bitmask;
+    board->occupancies[WHITE] &= clear_bitmask;
+    break;
+  case WHITE_QUEEN:
+    board->white_queens &= clear_bitmask;
+    board->occupancies[WHITE] &= clear_bitmask;
+    break;
+  case WHITE_KING:
+    board->white_king &= clear_bitmask;
+    board->occupancies[WHITE] &= clear_bitmask;
+    break;
+  case BLACK_PAWN:
+    board->black_pawns &= clear_bitmask;
+    board->occupancies[BLACK] &= clear_bitmask;
+    break;
+  case BLACK_KNIGHT:
+    board->black_knights &= clear_bitmask;
+    board->occupancies[BLACK] &= clear_bitmask;
+    break;
+  case BLACK_BISHOP:
+    board->black_bishops &= clear_bitmask;
+    board->occupancies[BLACK] &= clear_bitmask;
+    break;
+  case BLACK_ROOK:
+    board->black_rooks &= clear_bitmask;
+    board->occupancies[BLACK] &= clear_bitmask;
+    break;
+  case BLACK_QUEEN:
+    board->black_queens &= clear_bitmask;
+    board->occupancies[BLACK] &= clear_bitmask;
+    break;
+  case BLACK_KING:
+    board->black_king &= clear_bitmask;
+    board->occupancies[BLACK] &= clear_bitmask;
+    break;
+  default:
+    break;
+  }
+
+  board->pieces[square] = EMPTY;
+
+  return hash;
+}
+
+uint64_t zobrist_add_piece(board_t *board, int square, piece_t piece) {
+  board->pieces[square] = piece;
+
+  uint64_t set_bitmask = 1ULL << square;
+
+  switch (piece) {
+  case WHITE_PAWN:
+    board->white_pawns |= set_bitmask;
+    board->occupancies[WHITE] |= set_bitmask;
+    break;
+  case WHITE_KNIGHT:
+    board->white_knights |= set_bitmask;
+    board->occupancies[WHITE] |= set_bitmask;
+    break;
+  case WHITE_BISHOP:
+    board->white_bishops |= set_bitmask;
+    board->occupancies[WHITE] |= set_bitmask;
+    break;
+  case WHITE_ROOK:
+    board->white_rooks |= set_bitmask;
+    board->occupancies[WHITE] |= set_bitmask;
+    break;
+  case WHITE_QUEEN:
+    board->white_queens |= set_bitmask;
+    board->occupancies[WHITE] |= set_bitmask;
+    break;
+  case WHITE_KING:
+    board->white_king |= set_bitmask;
+    board->occupancies[WHITE] |= set_bitmask;
+    break;
+  case BLACK_PAWN:
+    board->black_pawns |= set_bitmask;
+    board->occupancies[BLACK] |= set_bitmask;
+    break;
+  case BLACK_KNIGHT:
+    board->black_knights |= set_bitmask;
+    board->occupancies[BLACK] |= set_bitmask;
+    break;
+  case BLACK_BISHOP:
+    board->black_bishops |= set_bitmask;
+    board->occupancies[BLACK] |= set_bitmask;
+    break;
+  case BLACK_ROOK:
+    board->black_rooks |= set_bitmask;
+    board->occupancies[BLACK] |= set_bitmask;
+    break;
+  case BLACK_QUEEN:
+    board->black_queens |= set_bitmask;
+    board->occupancies[BLACK] |= set_bitmask;
+    break;
+  case BLACK_KING:
+    board->black_king |= set_bitmask;
+    board->occupancies[BLACK] |= set_bitmask;
+    break;
+  default:
+    printf("Tried to move piece from empty square!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  return zobrist_piece(square, piece);
+}
+
 uint64_t generate_hash(const board_t *board) {
   uint64_t hash = 0ULL;
 
@@ -252,18 +393,18 @@ uint64_t generate_hash(const board_t *board) {
     piece_t piece = board->pieces[square];
 
     if (piece != EMPTY) {
-      hash ^= ZOBRIST_HASH_NUMBERS[(square * 12) + piece];
+      hash ^= zobrist_piece(square, piece);
     }
   }
 
   if (board->side == BLACK) {
-    hash ^= ZOBRIST_HASH_NUMBERS[768];
+    hash ^= zobrist_current_side();
   }
 
-  hash ^= ZOBRIST_HASH_NUMBERS[769 + board->castle_rights];
+  hash ^= zobrist_castle(board->castle_rights);
 
   if (board->en_passant_square != NO_SQUARE) {
-    hash ^= ZOBRIST_HASH_NUMBERS[769 + 16 + board->en_passant_square % 8];
+    hash ^= zobrist_en_passant_file(board->en_passant_square);
   }
 
   return hash;
@@ -1350,17 +1491,7 @@ void generate_castling_moves(const board_t *board, move_list_t *move_list) {
   }
 }
 
-int main() {
-  init_attack_masks();
-  init_zobrist_hash();
-
-  board_t *board = board_new();
-
-  board_parse_FEN(board, CASTLING_NO_KINGSIDE_FEN);
-  board_print(board);
-
-  move_list_t *move_list = move_list_new();
-
+void generate_all_moves(const board_t *board, move_list_t *move_list) {
   generate_pawn_moves(board, move_list);
   generate_knight_moves(board, move_list);
   generate_bishop_moves(board, move_list);
@@ -1368,8 +1499,111 @@ int main() {
   generate_queen_moves(board, move_list);
   generate_king_moves(board, move_list);
   generate_castling_moves(board, move_list);
+}
 
+bool make_move(board_t *board, move_t move) {
+  // IRREVERSIBLE STATE
+  // uint64_t prev_hash = board->hash;
+  // uint8_t prev_castle_rights = board->castle_rights;
+  // uint8_t prev_halfmove_clock = board->halfmove_clock;
+
+  piece_t moved_piece = board->pieces[move.from];
+  // piece_t captured_piece = board->pieces[move.to];
+
+  board->halfmove_clock++;
+
+  // clear en passant
+  board->hash ^= zobrist_en_passant_file(board->en_passant_square);
+  board->en_passant_square = NO_SQUARE;
+
+  board->hash ^= zobrist_remove_piece(board, move.from);
+
+  if (move.is_en_passant) {
+    square_t captured_square =
+        board->side == WHITE ? (move.to - 8) : (move.to + 8);
+    // TODO: uncomment when `captured_piece` is being used
+    // captured_piece = board->pieces[captured_square];
+
+    board->hash ^= zobrist_remove_piece(board, captured_square);
+    board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+  } else {
+    board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+  }
+
+  if (moved_piece == WHITE_PAWN || moved_piece == BLACK_PAWN) {
+    board->halfmove_clock = 0;
+
+    // double pawn push
+    if (abs((int8_t)(move.from) - (int8_t)(move.to)) == 16) {
+      board->en_passant_square =
+          board->side == WHITE ? (move.from + 8) : (move.from - 8);
+
+      // we only set en passant square if a pawn can actually capture, as per
+      // https://github.com/fsmosca/PGN-Standard/blob/61a82dab3ff62d79dea82c15a8cc773f80f3a91e/PGN-Standard.txt#L2231-L2242
+      uint64_t enemy_pawns =
+          board->side == WHITE ? board->black_pawns : board->white_pawns;
+      if ((PAWN_ATTACKS[board->side][board->en_passant_square] & enemy_pawns) ==
+          0) {
+        board->en_passant_square = NO_SQUARE;
+      }
+    }
+  }
+
+  board->side ^= 1;
+  board->hash ^= zobrist_current_side();
+
+  return true;
+}
+
+int main() {
+  init_attack_masks();
+  init_zobrist_hash();
+
+  board_t *board = board_new();
+
+  board_parse_FEN(board, START_FEN);
+  board_print(board);
+
+  make_move(board, (move_t){.from = E2,
+                            .to = E4,
+                            .castle = 0,
+                            .promotion = 0,
+                            .is_capture = false,
+                            .is_en_passant = false});
+
+  make_move(board, (move_t){.from = B7,
+                            .to = B5,
+                            .castle = 0,
+                            .promotion = 0,
+                            .is_capture = false,
+                            .is_en_passant = false});
+
+  make_move(board, (move_t){.from = E4,
+                            .to = E5,
+                            .castle = 0,
+                            .promotion = 0,
+                            .is_capture = false,
+                            .is_en_passant = false});
+
+  make_move(board, (move_t){.from = D7,
+                            .to = D5,
+                            .castle = 0,
+                            .promotion = 0,
+                            .is_capture = false,
+                            .is_en_passant = false});
+
+  make_move(board, (move_t){.from = E5,
+                            .to = D6,
+                            .castle = 0,
+                            .promotion = 0,
+                            .is_capture = true,
+                            .is_en_passant = true});
+
+  move_list_t *move_list = move_list_new();
+  generate_all_moves(board, move_list);
   move_list_print(move_list);
+
+  board_print(board);
 
   return EXIT_SUCCESS;
 }
