@@ -1518,19 +1518,28 @@ bool make_move(board_t *board, move_t move) {
 
   board->hash ^= zobrist_remove_piece(board, move.from);
 
-  if (move.is_en_passant) {
-    square_t captured_square =
-        board->side == WHITE ? (move.to - 8) : (move.to + 8);
-    // TODO: uncomment when `captured_piece` is being used
-    // captured_piece = board->pieces[captured_square];
+  if (move.is_capture) {
+    if (move.is_en_passant) {
+      square_t captured_square =
+          board->side == WHITE ? (move.to - 8) : (move.to + 8);
+      // TODO: uncomment when `captured_piece` is being used
+      // captured_piece = board->pieces[captured_square];
 
-    board->hash ^= zobrist_remove_piece(board, captured_square);
-    board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+      board->hash ^= zobrist_remove_piece(board, captured_square);
+      board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+    } else {
+      board->hash ^= zobrist_remove_piece(board, move.to);
+      board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+    }
+
+    // captures reset fifty-move rule clock
+    board->halfmove_clock = 0;
   } else {
     board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
   }
 
   if (moved_piece == WHITE_PAWN || moved_piece == BLACK_PAWN) {
+    // pawn moves reset fifty-move rule clock
     board->halfmove_clock = 0;
 
     // double pawn push
@@ -1599,9 +1608,9 @@ int main() {
                             .is_capture = true,
                             .is_en_passant = true});
 
-  move_list_t *move_list = move_list_new();
-  generate_all_moves(board, move_list);
-  move_list_print(move_list);
+  // move_list_t *move_list = move_list_new();
+  // generate_all_moves(board, move_list);
+  // move_list_print(move_list);
 
   board_print(board);
 
