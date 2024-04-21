@@ -1509,7 +1509,7 @@ bool make_move(board_t *board, move_t move) {
   // uint8_t prev_halfmove_clock = board->halfmove_clock;
 
   piece_t moved_piece = board->pieces[move.from];
-  // piece_t captured_piece = board->pieces[move.to];
+  piece_t captured_piece = board->pieces[move.to];
 
   board->halfmove_clock++;
 
@@ -1527,8 +1527,7 @@ bool make_move(board_t *board, move_t move) {
     if (move.flag == EN_PASSANT) {
       square_t captured_square =
           board->side == WHITE ? (move.to - 8) : (move.to + 8);
-      // TODO: uncomment when `captured_piece` is being used
-      // captured_piece = board->pieces[captured_square];
+      captured_piece = board->pieces[captured_square];
 
       board->hash ^= zobrist_remove_piece(board, captured_square);
       board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
@@ -1541,30 +1540,38 @@ bool make_move(board_t *board, move_t move) {
   case CASTLE:
     printf("TODO: CASTLING");
     break;
-  case PROMOTION:
-    printf("TODO: PROMOTION");
+  case PROMOTION: {
+    if (captured_piece != EMPTY) {
+      board->hash ^= zobrist_remove_piece(board, move.to);
+    }
+
+    piece_t promotion_piece = EMPTY;
+
+    if (move.flag == KNIGHT_PROMOTION) {
+      promotion_piece = board->side == WHITE ? WHITE_KNIGHT : BLACK_KNIGHT;
+    }
+
+    if (move.flag == BISHOP_PROMOTION) {
+      promotion_piece = board->side == WHITE ? WHITE_BISHOP : BLACK_BISHOP;
+    }
+
+    if (move.flag == ROOK_PROMOTION) {
+      promotion_piece = board->side == WHITE ? WHITE_ROOK : BLACK_ROOK;
+    }
+
+    if (move.flag == QUEEN_PROMOTION) {
+      promotion_piece = board->side == WHITE ? WHITE_QUEEN : BLACK_QUEEN;
+    }
+
+    if (promotion_piece == EMPTY) {
+      printf("Expected promotion flag\n");
+      exit(EXIT_FAILURE);
+    }
+
+    board->hash ^= zobrist_add_piece(board, move.to, promotion_piece);
     break;
   }
-
-  // if (move.is_capture) {
-  //   if (move.is_en_passant) {
-  //     square_t captured_square =
-  //         board->side == WHITE ? (move.to - 8) : (move.to + 8);
-  //     // TODO: uncomment when `captured_piece` is being used
-  //     // captured_piece = board->pieces[captured_square];
-  //
-  //     board->hash ^= zobrist_remove_piece(board, captured_square);
-  //     board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
-  //   } else {
-  //     board->hash ^= zobrist_remove_piece(board, move.to);
-  //     board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
-  //   }
-  //
-  //   // captures reset fifty-move rule clock
-  //   board->halfmove_clock = 0;
-  // } else {
-  //   board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
-  // }
+  }
 
   if (moved_piece == WHITE_PAWN || moved_piece == BLACK_PAWN) {
     // pawn moves reset fifty-move rule clock
@@ -1598,27 +1605,9 @@ int main() {
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, START_FEN);
+  board_parse_FEN(board, PAWN_CAPTURES_WHITE_FEN);
 
-  make_move(
-      board,
-      (move_t){.from = E2, .to = E4, .move_type = QUIET, .flag = NO_FLAG});
-
-  make_move(
-      board,
-      (move_t){.from = B7, .to = B5, .move_type = QUIET, .flag = NO_FLAG});
-
-  make_move(
-      board,
-      (move_t){.from = E4, .to = E5, .move_type = QUIET, .flag = NO_FLAG});
-
-  make_move(
-      board,
-      (move_t){.from = D7, .to = D5, .move_type = QUIET, .flag = NO_FLAG});
-
-  make_move(
-      board,
-      (move_t){.from = E5, .to = D6, .move_type = CAPTURE, .flag = EN_PASSANT});
+  make_move(board, move_new(G7, H8, PROMOTION, QUEEN_PROMOTION));
 
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
