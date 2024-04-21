@@ -1537,9 +1537,37 @@ bool make_move(board_t *board, move_t move) {
     }
     break;
   }
-  case CASTLE:
-    printf("TODO: CASTLING");
+  case CASTLE: {
+    square_t rook_from_square;
+    square_t rook_to_square;
+
+    if (move.to == G1) {
+      rook_from_square = H1;
+      rook_to_square = F1;
+    } else if (move.to == C1) {
+      rook_from_square = A1;
+      rook_to_square = D1;
+    } else if (move.to == G8) {
+      rook_from_square = H8;
+      rook_to_square = F8;
+    } else if (move.to == C8) {
+      rook_from_square = A8;
+      rook_to_square = D8;
+    } else {
+      printf("Invalid rook move\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // move the king
+    board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+
+    // move the rook
+    board->hash ^= zobrist_add_piece(
+        board, rook_to_square, board->side == WHITE ? WHITE_ROOK : BLACK_ROOK);
+    board->hash ^= zobrist_remove_piece(board, rook_from_square);
+
     break;
+  }
   case PROMOTION: {
     if (captured_piece != EMPTY) {
       board->hash ^= zobrist_remove_piece(board, move.to);
@@ -1605,9 +1633,10 @@ int main() {
 
   board_t *board = board_new();
 
-  board_parse_FEN(board, PAWN_CAPTURES_WHITE_FEN);
+  board_parse_FEN(board, CASTLING_BASIC_FEN);
 
-  make_move(board, move_new(G7, H8, PROMOTION, QUEEN_PROMOTION));
+  make_move(board, move_new(E1, G1, CASTLE, NO_FLAG));
+  make_move(board, move_new(E8, C8, CASTLE, NO_FLAG));
 
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
