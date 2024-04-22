@@ -1289,28 +1289,31 @@ uint64_t get_queen_attacks(int square, uint64_t blockers) {
          BISHOP_ATTACK_TABLE[bishop_magic_index];
 }
 
-bool is_square_attacked(int square, const board_t *board, side_t side) {
-  uint64_t pawns = side == WHITE ? board->white_pawns : board->black_pawns;
+bool is_square_attacked(int square, const board_t *board,
+                        side_t attacker_side) {
+  uint64_t pawns =
+      attacker_side == WHITE ? board->white_pawns : board->black_pawns;
 
-  if (PAWN_ATTACKS[side ^ 1][square] & pawns) {
+  if (PAWN_ATTACKS[attacker_side ^ 1][square] & pawns) {
     return true;
   }
 
-  uint64_t king = side == WHITE ? board->white_king : board->black_king;
+  uint64_t king =
+      attacker_side == WHITE ? board->white_king : board->black_king;
 
   if (KING_ATTACKS[square] & king) {
     return true;
   }
 
   uint64_t knights =
-      side == WHITE ? board->white_knights : board->black_knights;
+      attacker_side == WHITE ? board->white_knights : board->black_knights;
 
   if (KNIGHT_ATTACKS[square] & knights) {
     return true;
   }
 
   uint64_t bishops =
-      side == WHITE ? board->white_bishops : board->black_bishops;
+      attacker_side == WHITE ? board->white_bishops : board->black_bishops;
 
   if (get_bishop_attacks(square, board->occupancies[WHITE] |
                                      board->occupancies[BLACK]) &
@@ -1318,7 +1321,8 @@ bool is_square_attacked(int square, const board_t *board, side_t side) {
     return true;
   }
 
-  uint64_t rooks = side == WHITE ? board->white_rooks : board->black_rooks;
+  uint64_t rooks =
+      attacker_side == WHITE ? board->white_rooks : board->black_rooks;
 
   if (get_rook_attacks(square,
                        board->occupancies[WHITE] | board->occupancies[BLACK]) &
@@ -1326,7 +1330,8 @@ bool is_square_attacked(int square, const board_t *board, side_t side) {
     return true;
   }
 
-  uint64_t queens = side == WHITE ? board->white_queens : board->black_queens;
+  uint64_t queens =
+      attacker_side == WHITE ? board->white_queens : board->black_queens;
 
   if (get_queen_attacks(square,
                         board->occupancies[WHITE] | board->occupancies[BLACK]) &
@@ -1526,6 +1531,7 @@ bool make_move(board_t *board, move_t move) {
 
   board->halfmove_clock++;
 
+  // TODO: could this be lower down?
   // clear en passant
   board->hash ^= zobrist_en_passant_file(board->en_passant_square);
   board->en_passant_square = NO_SQUARE;
@@ -1639,10 +1645,22 @@ bool make_move(board_t *board, move_t move) {
                          CASTLE_PERMISSIONS[move.to];
   board->hash ^= zobrist_castle(board->castle_rights);
 
+  if (board->en_passant_square != NO_SQUARE) {
+    board->hash ^= zobrist_en_passant_file(board->en_passant_square);
+  }
+
   board->side ^= 1;
   board->hash ^= zobrist_current_side();
 
-  return true;
+  uint64_t king_bitboard =
+      board->side == WHITE ? board->black_king : board->white_king;
+
+  square_t king_position = __builtin_ctzll(get_lsb(king_bitboard));
+
+  // illegal moves return false
+  // here, we are checking if we left our king in check with our move, which
+  // would make it illegal
+  return !is_square_attacked(king_position, board, board->side);
 }
 
 int main() {
@@ -1655,11 +1673,11 @@ int main() {
 
   board_print(board);
 
-  make_move(board, move_new(E1, G1, CASTLE, NO_FLAG));
+  printf("LEGAL: %d\n", make_move(board, move_new(E1, G1, CASTLE, NO_FLAG)));
 
   board_print(board);
 
-  make_move(board, move_new(E8, C8, CASTLE, NO_FLAG));
+  printf("LEGAL: %d\n", make_move(board, move_new(E8, F8, QUIET, NO_FLAG)));
 
   board_print(board);
 
