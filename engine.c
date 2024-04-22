@@ -211,6 +211,19 @@ const uint8_t BISHOP_RELEVANT_BITS[64] = {
 uint64_t ROOK_ATTACK_TABLE[102400];
 uint64_t BISHOP_ATTACK_TABLE[5248];
 
+// clang-format off
+const int CASTLE_PERMISSIONS[64] = {
+  13, 15, 15, 15, 12, 15, 15, 14,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  15, 15, 15, 15, 15, 15, 15, 15,
+  07, 15, 15, 15, 03, 15, 15, 11
+};
+// clang-format on
+
 typedef struct {
   uint64_t state;
 } prng_t;
@@ -1621,6 +1634,11 @@ bool make_move(board_t *board, move_t move) {
     }
   }
 
+  board->hash ^= zobrist_castle(board->castle_rights);
+  board->castle_rights = board->castle_rights & CASTLE_PERMISSIONS[move.from] &
+                         CASTLE_PERMISSIONS[move.to];
+  board->hash ^= zobrist_castle(board->castle_rights);
+
   board->side ^= 1;
   board->hash ^= zobrist_current_side();
 
@@ -1635,14 +1653,19 @@ int main() {
 
   board_parse_FEN(board, CASTLING_BASIC_FEN);
 
+  board_print(board);
+
   make_move(board, move_new(E1, G1, CASTLE, NO_FLAG));
+
+  board_print(board);
+
   make_move(board, move_new(E8, C8, CASTLE, NO_FLAG));
+
+  board_print(board);
 
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
   move_list_print(move_list);
-
-  board_print(board);
 
   return EXIT_SUCCESS;
 }
