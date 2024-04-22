@@ -79,6 +79,15 @@ typedef struct {
 } move_list_t;
 
 typedef struct {
+  uint64_t hash;
+  uint8_t castle_rights;
+  square_t en_passant_square;
+  uint8_t halfmove_clock;
+  piece_t moved_piece;
+  piece_t captured_piece;
+} history_item_t;
+
+typedef struct {
   uint64_t white_pawns;
   uint64_t white_knights;
   uint64_t white_bishops;
@@ -106,6 +115,9 @@ typedef struct {
   square_t en_passant_square;
 
   uint64_t hash;
+
+  history_item_t history[500];
+  int history_length;
 } board_t;
 
 const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
@@ -492,6 +504,8 @@ board_t *board_new() {
   board->occupancies[WHITE] = 0ULL;
   board->occupancies[BLACK] = 0ULL;
 
+  board->history_length = 0;
+
   return board;
 }
 
@@ -540,6 +554,7 @@ void board_print(board_t *board) {
              ? "-"
              : SQUARE_TO_READABLE[board->en_passant_square]);
   printf("Hash: 0x%luULL\n", board->hash);
+  printf("History length: %d\n", board->history_length);
 }
 
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -1521,13 +1536,13 @@ void generate_all_moves(const board_t *board, move_list_t *move_list) {
 }
 
 bool make_move(board_t *board, move_t move) {
-  // IRREVERSIBLE STATE
-  // uint64_t prev_hash = board->hash;
-  // uint8_t prev_castle_rights = board->castle_rights;
-  // uint8_t prev_halfmove_clock = board->halfmove_clock;
-
-  piece_t moved_piece = board->pieces[move.from];
-  piece_t captured_piece = board->pieces[move.to];
+  history_item_t irreversible_state = {
+      .hash = board->hash,
+      .castle_rights = board->castle_rights,
+      .en_passant_square = board->en_passant_square,
+      .halfmove_clock = board->halfmove_clock,
+      .moved_piece = board->pieces[move.from],
+      .captured_piece = board->pieces[move.to]};
 
   board->halfmove_clock++;
 
@@ -1540,19 +1555,22 @@ bool make_move(board_t *board, move_t move) {
 
   switch (move.move_type) {
   case QUIET:
-    board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+    board->hash ^=
+        zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
     break;
   case CAPTURE: {
     if (move.flag == EN_PASSANT) {
       square_t captured_square =
           board->side == WHITE ? (move.to - 8) : (move.to + 8);
-      captured_piece = board->pieces[captured_square];
+      irreversible_state.captured_piece = board->pieces[captured_square];
 
       board->hash ^= zobrist_remove_piece(board, captured_square);
-      board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+      board->hash ^=
+          zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
     } else {
       board->hash ^= zobrist_remove_piece(board, move.to);
-      board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+      board->hash ^=
+          zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
     }
     break;
   }
@@ -1578,7 +1596,8 @@ bool make_move(board_t *board, move_t move) {
     }
 
     // move the king
-    board->hash ^= zobrist_add_piece(board, move.to, moved_piece);
+    board->hash ^=
+        zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
 
     // move the rook
     board->hash ^= zobrist_add_piece(
@@ -1588,7 +1607,7 @@ bool make_move(board_t *board, move_t move) {
     break;
   }
   case PROMOTION: {
-    if (captured_piece != EMPTY) {
+    if (irreversible_state.captured_piece != EMPTY) {
       board->hash ^= zobrist_remove_piece(board, move.to);
     }
 
@@ -1620,7 +1639,8 @@ bool make_move(board_t *board, move_t move) {
   }
   }
 
-  if (moved_piece == WHITE_PAWN || moved_piece == BLACK_PAWN) {
+  if (irreversible_state.moved_piece == WHITE_PAWN ||
+      irreversible_state.moved_piece == BLACK_PAWN) {
     // pawn moves reset fifty-move rule clock
     board->halfmove_clock = 0;
 
@@ -1651,6 +1671,9 @@ bool make_move(board_t *board, move_t move) {
 
   board->side ^= 1;
   board->hash ^= zobrist_current_side();
+
+  board->history[board->history_length] = irreversible_state;
+  board->history_length++;
 
   uint64_t king_bitboard =
       board->side == WHITE ? board->black_king : board->white_king;
