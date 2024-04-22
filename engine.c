@@ -1686,6 +1686,77 @@ bool make_move(board_t *board, move_t move) {
   return !is_square_attacked(king_position, board, board->side);
 }
 
+void unmake_move(board_t *board, move_t move) {
+  board->history_length--;
+  history_item_t move_state = board->history[board->history_length];
+
+  board->hash = move_state.hash;
+  board->castle_rights = move_state.castle_rights;
+  board->en_passant_square = move_state.en_passant_square;
+  board->halfmove_clock = move_state.halfmove_clock;
+
+  board->side ^= 1;
+
+  zobrist_add_piece(board, move.from, move_state.moved_piece);
+
+  switch (move.move_type) {
+  case QUIET:
+    zobrist_remove_piece(board, move.to);
+    board_print(board);
+    break;
+  case CAPTURE: {
+    if (move.flag == EN_PASSANT) {
+      square_t captured_square =
+          board->side == WHITE ? (move.to - 8) : (move.to + 8);
+
+      zobrist_remove_piece(board, move.to);
+      zobrist_add_piece(board, captured_square, move_state.captured_piece);
+    } else {
+      zobrist_remove_piece(board, move.to);
+      zobrist_add_piece(board, move.to, move_state.captured_piece);
+    }
+    break;
+  }
+  case CASTLE: {
+    square_t rook_from_square;
+    square_t rook_to_square;
+
+    if (move.to == G1) {
+      rook_from_square = H1;
+      rook_to_square = F1;
+    } else if (move.to == C1) {
+      rook_from_square = A1;
+      rook_to_square = D1;
+    } else if (move.to == G8) {
+      rook_from_square = H8;
+      rook_to_square = F8;
+    } else if (move.to == C8) {
+      rook_from_square = A8;
+      rook_to_square = D8;
+    } else {
+      printf("Invalid rook move\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // remove the king
+    zobrist_remove_piece(board, move.to);
+
+    // move the rook back
+    zobrist_remove_piece(board, rook_to_square);
+    zobrist_add_piece(board, rook_from_square,
+                      board->side == WHITE ? WHITE_ROOK : BLACK_ROOK);
+    break;
+  }
+  case PROMOTION: {
+    zobrist_remove_piece(board, move.to);
+    if (move_state.captured_piece != EMPTY) {
+      zobrist_add_piece(board, move.to, move_state.captured_piece);
+    }
+    break;
+  }
+  }
+}
+
 int main() {
   init_attack_masks();
   init_zobrist_hash();
@@ -1700,7 +1771,12 @@ int main() {
 
   board_print(board);
 
-  printf("LEGAL: %d\n", make_move(board, move_new(E8, F8, QUIET, NO_FLAG)));
+  move_t last_move = move_new(E8, F8, QUIET, NO_FLAG);
+  printf("LEGAL: %d\n", make_move(board, last_move));
+
+  board_print(board);
+
+  unmake_move(board, last_move);
 
   board_print(board);
 
