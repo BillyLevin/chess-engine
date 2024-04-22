@@ -1757,32 +1757,20 @@ void unmake_move(board_t *board, move_t move) {
   }
 }
 
-int main() {
+void init_all() {
   init_attack_masks();
   init_zobrist_hash();
+}
+
+int main() {
+  init_all();
 
   board_t *board = board_new();
+  move_list_t *move_list = move_list_new();
 
   board_parse_FEN(board, CASTLING_BASIC_FEN);
 
-  board_print(board);
-
-  printf("LEGAL: %d\n", make_move(board, move_new(E1, G1, CASTLE, NO_FLAG)));
-
-  board_print(board);
-
-  move_t last_move = move_new(E8, F8, QUIET, NO_FLAG);
-  printf("LEGAL: %d\n", make_move(board, last_move));
-
-  board_print(board);
-
-  unmake_move(board, last_move);
-
-  board_print(board);
-
-  move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
-  move_list_print(move_list);
 
   return EXIT_SUCCESS;
 }
