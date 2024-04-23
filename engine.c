@@ -1803,19 +1803,15 @@ uint64_t perft(board_t *board, int depth) {
 
 #include "sys/time.h"
 
-int GetTimeMs() {
-#ifdef WIN32
-  return GetTickCount();
-#else
+int get_time_ms() {
   struct timeval t;
   gettimeofday(&t, NULL);
   return t.tv_sec * 1000 + t.tv_usec / 1000;
-#endif
 }
 
 void perft_test(board_t *board, int depth) {
   printf("\nStarting Test To Depth:%d\n", depth);
-  int start = GetTimeMs();
+  int start = get_time_ms();
 
   uint64_t nodes = 0;
   int move_num = 0;
@@ -1842,23 +1838,83 @@ void perft_test(board_t *board, int depth) {
   free(move_list);
 
   printf("\nTest Complete : %ld nodes visited in %dms\n", nodes,
-         GetTimeMs() - start);
+         get_time_ms() - start);
 
   return;
 }
 
-#define PERFT_FEN                                                              \
-  "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
-#define thing "R6r/8/8/2K5/5k2/8/8/r6R w - - 0 1"
+void run_perft_suite() {
+  FILE *perft_file = fopen("perft.epd", "r");
+
+  char line[256];
+  char fens[256][100];
+  int depths[256];
+  uint64_t nodes[256];
+  size_t line_count = 0;
+
+  while (fgets(line, sizeof(line), perft_file)) {
+    char fen[100];
+    size_t fen_size = 0;
+
+    for (int i = 0; i < sizeof(line); i++) {
+      if (line[i + 1] == ';') {
+        break;
+      }
+
+      fen[fen_size] = line[i];
+      fen_size++;
+    }
+    fen[fen_size] = '\0';
+
+    // +2 to eat the space and first semicolon
+    char *token = strtok(line + fen_size + 2, ";");
+
+    int depth = 0;
+    uint64_t expected_nodes = 0ULL;
+
+    while (token != NULL) {
+      int current_depth;
+      uint64_t current_expected_nodes;
+      sscanf(token, "D%d %lu", &current_depth, &current_expected_nodes);
+      token = strtok(NULL, ";");
+
+      if (!depth || current_depth > depth) {
+        depth = current_depth;
+        expected_nodes = current_expected_nodes;
+      }
+    }
+
+    strcpy(fens[line_count], fen);
+    depths[line_count] = depth;
+    nodes[line_count] = expected_nodes;
+
+    line_count++;
+  }
+
+  for (size_t i = 0; i < line_count; i++) {
+    board_t *board = board_new();
+    board_parse_FEN(board, fens[i]);
+    uint64_t expected_nodes = nodes[i];
+    int depth = depths[i];
+    printf("Perft test %zu - expected nodes: %lu, depth: %d", i + 1,
+           expected_nodes, depth);
+    uint64_t result = perft(board, depths[i]);
+    if (expected_nodes == result) {
+      printf("\033[32m Passed\033[0m\n");
+    } else {
+      printf("\033[31m Failed\033[0m\n");
+      exit(EXIT_FAILURE);
+    }
+    free(board);
+  }
+
+  printf("\n\033[32mAll tests passed! :)\033[0m\n");
+}
+
 int main() {
   init_all();
 
-  board_t *board = board_new();
-  board_parse_FEN(board, thing);
-  // printf("%lu\n", perft(board, 3));
-  perft_test(board, 6);
-
-  free(board);
+  run_perft_suite();
 
   return EXIT_SUCCESS;
 }
