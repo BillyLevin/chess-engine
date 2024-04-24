@@ -1896,9 +1896,14 @@ void run_perft_suite() {
     board_parse_FEN(board, fens[i]);
     uint64_t expected_nodes = nodes[i];
     int depth = depths[i];
-    printf("Perft test %zu - expected nodes: %lu, depth: %d", i + 1,
-           expected_nodes, depth);
+    printf("\033[36m[Perft test %zu/%zu]\033[0m expected nodes: %lu, depth: "
+           "%d",
+           i + 1, line_count, expected_nodes, depth);
+    fflush(stdout);
     uint64_t result = perft(board, depths[i]);
+    printf("\r\033[36m[Perft test %zu/%zu]\033[0m expected nodes: %lu, depth: "
+           "%d",
+           i + 1, line_count, expected_nodes, depth);
     if (expected_nodes == result) {
       printf("\033[32m Passed\033[0m\n");
     } else {
