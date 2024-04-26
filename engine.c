@@ -2114,7 +2114,13 @@ void uci_loop() {
     char *input = readline("uci> ");
     add_history(input);
 
-    if (strncmp(input, "position", 8) == 0) {
+    if (strncmp(input, "uci", 3) == 0) {
+      printf("id name Billy's Engine v1.0\n");
+      printf("id author Billy Levin\n");
+      printf("uciok\n");
+    } else if (strncmp(input, "isready", 7) == 0) {
+      printf("readyok\n");
+    } else if (strncmp(input, "position", 8) == 0) {
       uci_parse_position(board, input);
     }
   }
