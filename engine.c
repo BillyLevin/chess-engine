@@ -490,9 +490,7 @@ void bitboard_print(uint64_t bitboard, piece_t piece) {
   printf("\nRaw value: %lu\n\n", bitboard);
 };
 
-board_t *board_new() {
-  board_t *board = malloc(sizeof(board_t));
-
+void board_reset(board_t *board) {
   board->white_pawns = 0ULL;
   board->white_knights = 0ULL;
   board->white_bishops = 0ULL;
@@ -521,7 +519,11 @@ board_t *board_new() {
   board->occupancies[BLACK] = 0ULL;
 
   board->history_length = 0;
+}
 
+board_t *board_new() {
+  board_t *board = malloc(sizeof(board_t));
+  board_reset(board);
   return board;
 }
 
@@ -2049,6 +2051,8 @@ move_t uci_parse_move(board_t *board, char *move_string) {
 }
 
 void uci_parse_position(board_t *board, char *position) {
+  board_reset(board);
+
   char *current = position + 9;
 
   while (isspace(*current)) {
@@ -2101,6 +2105,15 @@ void uci_parse_position(board_t *board, char *position) {
   board_print(board);
 }
 
+void uci_parse_go(board_t *board) {
+  move_list_t *move_list = move_list_new();
+  generate_all_moves(board, move_list);
+
+  move_t move = move_list->moves[rand() % (move_list->count)];
+  printf("bestmove %s%s\n", SQUARE_TO_READABLE[move.from],
+         SQUARE_TO_READABLE[move.to]);
+}
+
 void uci_loop() {
   setbuf(stdin, NULL);
   setbuf(stdout, NULL);
@@ -2125,6 +2138,8 @@ void uci_loop() {
       printf("readyok\n");
     } else if (strncmp(input, "position", 8) == 0) {
       uci_parse_position(board, input);
+    } else if (strncmp(input, "go", 2) == 0) {
+      uci_parse_go(board);
     }
   }
 }
