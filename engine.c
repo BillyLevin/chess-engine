@@ -1808,11 +1808,6 @@ transposition_table_t *transposition_table_new(int size_in_mb) {
   table->size = size;
   table->entries = malloc(size * sizeof(transposition_table_entry_t));
 
-  for (size_t i = 0; i < size; i++) {
-    table->entries[i] =
-        (transposition_table_entry_t){.nodes = 0, .hash = 0, .depth = 0};
-  }
-
   return table;
 }
 
