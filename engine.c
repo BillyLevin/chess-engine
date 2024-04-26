@@ -1,3 +1,4 @@
+#include "sys/time.h"
 #include <ctype.h>
 #include <locale.h>
 #include <stdbool.h>
@@ -267,6 +268,20 @@ uint64_t prng_generate_random(prng_t *prng) {
 // https://www.chessprogramming.org/Zobrist_Hashing
 uint64_t ZOBRIST_HASH_NUMBERS[793];
 
+// clang-format off
+const uint8_t ZOBRIST_EP_FILES[65] = {
+    8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8,
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8,
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8,
+    8
+};
+// clang-format on
+
 void init_zobrist_hash() {
   prng_t prng = prng_new(123);
 
@@ -286,7 +301,7 @@ uint64_t zobrist_castle(uint8_t castle_rights) {
 }
 
 uint64_t zobrist_en_passant_file(int en_passant_square) {
-  return ZOBRIST_HASH_NUMBERS[769 + 16 + (en_passant_square / 8)];
+  return ZOBRIST_HASH_NUMBERS[769 + 16 + ZOBRIST_EP_FILES[en_passant_square]];
 }
 
 uint64_t zobrist_remove_piece(board_t *board, int square) {
@@ -1774,15 +1789,62 @@ void init_all() {
   init_zobrist_hash();
 }
 
-uint64_t perft(board_t *board, int depth) {
+typedef struct {
+  uint64_t hash;
+  uint64_t nodes;
+  int depth;
+} transposition_table_entry_t;
+
+typedef struct {
+  transposition_table_entry_t *entries;
+  size_t size;
+} transposition_table_t;
+
+transposition_table_t *transposition_table_new(int size_in_mb) {
+  transposition_table_t *table = malloc(sizeof(transposition_table_t));
+
+  size_t size = size_in_mb * 1024 * 1024 / sizeof(transposition_table_entry_t);
+
+  table->size = size;
+  table->entries = malloc(size * sizeof(transposition_table_entry_t));
+
+  for (size_t i = 0; i < size; i++) {
+    table->entries[i] =
+        (transposition_table_entry_t){.nodes = 0, .hash = 0, .depth = 0};
+  }
+
+  return table;
+}
+
+transposition_table_entry_t *
+transposition_table_probe(transposition_table_t *table, uint64_t hash) {
+  size_t index = hash % table->size;
+  return &table->entries[index];
+}
+
+void transposition_table_store(transposition_table_t *table, uint64_t hash,
+                               uint64_t nodes, int depth) {
+  size_t index = hash % table->size;
+  table->entries[index].nodes = nodes;
+  table->entries[index].hash = hash;
+  table->entries[index].depth = depth;
+}
+
+uint64_t perft(board_t *board, int depth, transposition_table_t *table) {
   if (depth == 0) {
     return 1;
+  }
+
+  transposition_table_entry_t *entry =
+      transposition_table_probe(table, board->hash);
+
+  if (entry->hash == board->hash && entry->depth == depth) {
+    return entry->nodes;
   }
 
   uint64_t nodes = 0;
 
   move_list_t *move_list = move_list_new();
-
   generate_all_moves(board, move_list);
 
   move_t move;
@@ -1790,18 +1852,18 @@ uint64_t perft(board_t *board, int depth) {
   for (int i = 0; i < move_list->count; i++) {
     move = move_list->moves[i];
     if (make_move(board, move)) {
-      nodes += perft(board, depth - 1);
+      nodes += perft(board, depth - 1, table);
     }
 
     unmake_move(board, move);
   }
 
+  transposition_table_store(table, board->hash, nodes, depth);
+
   free(move_list);
 
   return nodes;
 }
-
-#include "sys/time.h"
 
 int get_time_ms() {
   struct timeval t;
@@ -1809,39 +1871,40 @@ int get_time_ms() {
   return t.tv_sec * 1000 + t.tv_usec / 1000;
 }
 
-void perft_test(board_t *board, int depth) {
-  printf("\nStarting Test To Depth:%d\n", depth);
-  int start = get_time_ms();
-
-  uint64_t nodes = 0;
-  int move_num = 0;
-
-  move_list_t *move_list = move_list_new();
-
-  generate_all_moves(board, move_list);
-
-  move_t move;
-
-  for (int i = 0; i < move_list->count; i++) {
-    move = move_list->moves[i];
-    if (make_move(board, move)) {
-      move_num++;
-      uint64_t old_nodes = nodes;
-      nodes += perft(board, depth - 1);
-      printf("move %d : %s%s : %ld\n", move_num, SQUARE_TO_READABLE[move.from],
-             SQUARE_TO_READABLE[move.to], nodes - old_nodes);
-    }
-
-    unmake_move(board, move);
-  }
-
-  free(move_list);
-
-  printf("\nTest Complete : %ld nodes visited in %dms\n", nodes,
-         get_time_ms() - start);
-
-  return;
-}
+// void perft_test(board_t *board, int depth, transposition_table_t *table) {
+//   printf("\nStarting Test To Depth:%d\n", depth);
+//   int start = get_time_ms();
+//
+//   uint64_t nodes = 0;
+//   int move_num = 0;
+//
+//   move_list_t *move_list = move_list_new();
+//
+//   generate_all_moves(board, move_list);
+//
+//   move_t move;
+//
+//   for (int i = 0; i < move_list->count; i++) {
+//     move = move_list->moves[i];
+//     if (make_move(board, move)) {
+//       move_num++;
+//       uint64_t old_nodes = nodes;
+//       nodes += perft(board, depth - 1, table);
+//       printf("move %d : %s%s : %ld\n", move_num,
+//       SQUARE_TO_READABLE[move.from],
+//              SQUARE_TO_READABLE[move.to], nodes - old_nodes);
+//     }
+//
+//     unmake_move(board, move);
+//   }
+//
+//   free(move_list);
+//
+//   printf("\nTest Complete : %ld nodes visited in %dms\n", nodes,
+//          get_time_ms() - start);
+//
+//   return;
+// }
 
 void run_perft_suite() {
   FILE *perft_file = fopen("perft.epd", "r");
@@ -1851,6 +1914,8 @@ void run_perft_suite() {
   int depths[256];
   uint64_t nodes[256];
   size_t line_count = 0;
+
+  transposition_table_t *table = transposition_table_new(64);
 
   int start = get_time_ms();
 
@@ -1902,14 +1967,14 @@ void run_perft_suite() {
            "%d",
            i + 1, line_count, expected_nodes, depth);
     fflush(stdout);
-    uint64_t result = perft(board, depths[i]);
+    uint64_t result = perft(board, depths[i], table);
     printf("\r\033[36m[Perft test %zu/%zu]\033[0m expected nodes: %lu, depth: "
            "%d",
            i + 1, line_count, expected_nodes, depth);
     if (expected_nodes == result) {
       printf("\033[32m Passed\033[0m\n");
     } else {
-      printf("\033[31m Failed\033[0m\n");
+      printf("\033[31m Failed (got %lu)\033[0m\n", result);
       exit(EXIT_FAILURE);
     }
     free(board);
