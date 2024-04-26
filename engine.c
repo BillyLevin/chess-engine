@@ -1,5 +1,6 @@
 #include "sys/time.h"
 #include <ctype.h>
+#include <editline/readline.h>
 #include <locale.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -1986,10 +1987,149 @@ void run_perft_suite() {
          precise_seconds);
 }
 
-int main() {
+move_t uci_parse_move(board_t *board, char *move_string) {
+  while (isspace(*move_string)) {
+    move_string++;
+  }
+
+  if (move_string[0] < 'a' || move_string[0] > 'h') {
+    printf("Invalid move provided");
+    exit(EXIT_FAILURE);
+  }
+
+  if (move_string[2] < 'a' || move_string[2] > 'h') {
+    printf("Invalid move provided");
+    exit(EXIT_FAILURE);
+  }
+
+  if (move_string[1] < '1' || move_string[1] > '8') {
+    printf("Invalid move provided");
+    exit(EXIT_FAILURE);
+  }
+
+  if (move_string[3] < '1' || move_string[3] > '8') {
+    printf("Invalid move provided");
+    exit(EXIT_FAILURE);
+  }
+
+  int from = (move_string[0] - 'a') + (move_string[1] - '1') * 8;
+  int to = (move_string[2] - 'a') + (move_string[3] - '1') * 8;
+
+  move_list_t *move_list = move_list_new();
+  generate_all_moves(board, move_list);
+
+  for (size_t i = 0; i < move_list->count; i++) {
+    move_t move = move_list->moves[i];
+
+    if (move.from == from && move.to == to) {
+      if (move.move_type == PROMOTION) {
+        if (move.flag == KNIGHT_PROMOTION && move_string[5] == 'n') {
+          return move;
+        }
+
+        if (move.flag == BISHOP_PROMOTION && move_string[5] == 'b') {
+          return move;
+        }
+
+        if (move.flag == ROOK_PROMOTION && move_string[5] == 'r') {
+          return move;
+        }
+
+        if (move.flag == QUEEN_PROMOTION && move_string[5] == 'q') {
+          return move;
+        }
+      } else {
+        return move;
+      }
+    }
+  }
+
+  printf("Provided move was valid but illegal in this position\n");
+  exit(EXIT_FAILURE);
+}
+
+void uci_parse_position(board_t *board, char *position) {
+  char *current = position + 9;
+
+  while (isspace(*current)) {
+    current++;
+  }
+
+  if (strncmp(current, "startpos", 8) == 0) {
+    board_parse_FEN(board, START_FEN);
+  } else {
+    current = strstr(current, "fen");
+    if (current == NULL) {
+      printf("invalid position string. need either `startpos` or `fen`");
+      exit(EXIT_FAILURE);
+    } else {
+      current += 4;
+      while (isspace(*current)) {
+        current++;
+      }
+      board_parse_FEN(board, current);
+    }
+  }
+
+  current = strstr(current, "moves");
+  if (current != NULL) {
+    current += 6;
+
+    move_t move;
+
+    while (isspace(*current)) {
+      current++;
+    }
+
+    while (*current) {
+      move = uci_parse_move(board, current);
+      make_move(board, move);
+
+      while (isalnum(*current)) {
+        current++;
+      }
+
+      while (isspace(*current)) {
+        current++;
+      }
+    }
+
+    // the moves won't be undone, so no point storing them in history
+    board->history_length = 0;
+  }
+
+  board_print(board);
+}
+
+void uci_loop() {
   init_all();
 
-  run_perft_suite();
+  board_t *board = board_new();
+
+  printf("id name Billy's Engine v1.0\n");
+  printf("id author Billy Levin\n");
+  printf("uciok\n");
+
+  while (1) {
+    char *input = readline("uci> ");
+    add_history(input);
+
+    if (strncmp(input, "position", 8) == 0) {
+      uci_parse_position(board, input);
+    }
+  }
+}
+
+int main() {
+  while (1) {
+    char *input = readline("engine> ");
+    add_history(input);
+
+    if (strncmp(input, "uci", 3) == 0) {
+      uci_loop();
+      break;
+    }
+  }
 
   return EXIT_SUCCESS;
 }
