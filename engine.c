@@ -2102,6 +2102,9 @@ void uci_parse_position(board_t *board, char *position) {
 }
 
 void uci_loop() {
+  setbuf(stdin, NULL);
+  setbuf(stdout, NULL);
+
   init_all();
 
   board_t *board = board_new();
@@ -2111,7 +2114,7 @@ void uci_loop() {
   printf("uciok\n");
 
   while (1) {
-    char *input = readline("uci> ");
+    char *input = readline(NULL);
     add_history(input);
 
     if (strncmp(input, "uci", 3) == 0) {
@@ -2128,7 +2131,7 @@ void uci_loop() {
 
 int main() {
   while (1) {
-    char *input = readline("engine> ");
+    char *input = readline(NULL);
     add_history(input);
 
     if (strncmp(input, "uci", 3) == 0) {
