@@ -1852,6 +1852,8 @@ void run_perft_suite() {
   uint64_t nodes[256];
   size_t line_count = 0;
 
+  int start = get_time_ms();
+
   while (fgets(line, sizeof(line), perft_file)) {
     char fen[100];
     size_t fen_size = 0;
@@ -1913,7 +1915,15 @@ void run_perft_suite() {
     free(board);
   }
 
-  printf("\n\033[32mAll tests passed! :)\033[0m\n");
+  int end = get_time_ms() - start;
+  int minutes = end / (1000 * 60);
+  int seconds = (end / 1000) % 60;
+  int milliseconds = end % 1000;
+
+  float precise_seconds = seconds + ((float)milliseconds / 1000);
+
+  printf("\n\033[32mAll tests passed in %dm %.1fs\033[0m\n", minutes,
+         precise_seconds);
 }
 
 int main() {
