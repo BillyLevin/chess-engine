@@ -2109,7 +2109,18 @@ void uci_parse_go(board_t *board) {
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
 
-  move_t move = move_list->moves[rand() % (move_list->count)];
+  move_t move;
+
+  for (size_t i = 0; i < move_list->count; i++) {
+    move = move_list->moves[i];
+    if (make_move(board, move)) {
+      unmake_move(board, move);
+      break;
+    }
+
+    unmake_move(board, move);
+  }
+
   printf("bestmove %s%s\n", SQUARE_TO_READABLE[move.from],
          SQUARE_TO_READABLE[move.to]);
 }
