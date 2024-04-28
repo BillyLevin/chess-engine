@@ -121,6 +121,8 @@ typedef struct {
 
   history_item_t history[500];
   int history_length;
+
+  int ply;
 } board_t;
 
 typedef struct {
@@ -537,6 +539,7 @@ void board_reset(board_t *board) {
   board->occupancies[BLACK] = 0ULL;
 
   board->history_length = 0;
+  board->ply = 0;
 }
 
 board_t *board_new() {
@@ -1724,6 +1727,8 @@ bool make_move(board_t *board, move_t move) {
   board->history[board->history_length] = irreversible_state;
   board->history_length++;
 
+  board->ply++;
+
   uint64_t king_bitboard =
       board->side == WHITE ? board->black_king : board->white_king;
 
@@ -1738,6 +1743,8 @@ bool make_move(board_t *board, move_t move) {
 void unmake_move(board_t *board, move_t move) {
   board->history_length--;
   history_item_t move_state = board->history[board->history_length];
+
+  board->ply--;
 
   board->hash = move_state.hash;
   board->castle_rights = move_state.castle_rights;
@@ -2035,6 +2042,7 @@ int negamax(board_t *board, int depth, move_t *best_move) {
   if (depth == 0) {
     return evaluate_position(board);
   }
+
   int max = -INT_MAX;
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
@@ -2046,20 +2054,28 @@ int negamax(board_t *board, int depth, move_t *best_move) {
     }
 
     int score = -negamax(board, depth - 1, best_move);
+    unmake_move(board, move_list->moves[i]);
     if (score > max) {
       max = score;
-      *best_move = move_list->moves[i];
-    }
 
-    unmake_move(board, move_list->moves[i]);
+      if (board->ply == 0) {
+        *best_move = move_list->moves[i];
+      }
+    }
   }
   free(move_list);
   return max;
 }
 
 void search_position(board_t *board, search_info_t *search_info) {
+  board->ply = 0;
+
   move_t best_move;
-  negamax(board, search_info->depth, &best_move);
+
+  for (int depth = 1; depth <= search_info->depth; depth++) {
+    negamax(board, search_info->depth, &best_move);
+  }
+
   printf("bestmove %s%s", SQUARE_TO_READABLE[best_move.from],
          SQUARE_TO_READABLE[best_move.to]);
   if (best_move.move_type == PROMOTION) {
@@ -2182,9 +2198,6 @@ void uci_parse_position(board_t *board, char *position) {
   }
 }
 
-#define OBVIOUS_MOVE_FEN                                                       \
-  "rnb1kb1r/ppp1pppp/5n2/3q4/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4"
-
 void uci_parse_go(board_t *board, char *move_string) {
   search_info_t search_info = {
       .depth = -1, .time_left = -1, .moves_to_go = -1, .move_time = -1};
@@ -2256,5 +2269,7 @@ void main_loop() {
 
 int main() {
   main_loop();
+  // init_all();
+  // run_perft_suite();
   return EXIT_SUCCESS;
 }
