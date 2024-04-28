@@ -238,6 +238,8 @@ const int CASTLE_PERMISSIONS[64] = {
 };
 // clang-format on
 
+const char FLAG_TO_ALGEBRAIC_NOTATION[6] = {'-', 'n', 'b', 'r', 'q', '-'};
+
 typedef struct {
   uint64_t state;
 } prng_t;
@@ -2025,19 +2027,19 @@ move_t uci_parse_move(board_t *board, char *move_string) {
 
     if (move.from == from && move.to == to) {
       if (move.move_type == PROMOTION) {
-        if (move.flag == KNIGHT_PROMOTION && move_string[5] == 'n') {
+        if (move.flag == KNIGHT_PROMOTION && move_string[4] == 'n') {
           return move;
         }
 
-        if (move.flag == BISHOP_PROMOTION && move_string[5] == 'b') {
+        if (move.flag == BISHOP_PROMOTION && move_string[4] == 'b') {
           return move;
         }
 
-        if (move.flag == ROOK_PROMOTION && move_string[5] == 'r') {
+        if (move.flag == ROOK_PROMOTION && move_string[4] == 'r') {
           return move;
         }
 
-        if (move.flag == QUEEN_PROMOTION && move_string[5] == 'q') {
+        if (move.flag == QUEEN_PROMOTION && move_string[4] == 'q') {
           return move;
         }
       } else {
@@ -2121,8 +2123,12 @@ void uci_parse_go(board_t *board) {
     unmake_move(board, move);
   }
 
-  printf("bestmove %s%s\n", SQUARE_TO_READABLE[move.from],
+  printf("bestmove %s%s", SQUARE_TO_READABLE[move.from],
          SQUARE_TO_READABLE[move.to]);
+  if (move.move_type == PROMOTION) {
+    printf("%c", FLAG_TO_ALGEBRAIC_NOTATION[move.flag]);
+  }
+  printf("\n");
 }
 
 void uci_loop() {
