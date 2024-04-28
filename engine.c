@@ -2206,7 +2206,7 @@ void uci_parse_go(board_t *board, char *move_string) {
   }
 
   if (search_info.depth == -1) {
-    search_info.depth = 64;
+    search_info.depth = 5;
   }
 
   search_position(board, &search_info);
