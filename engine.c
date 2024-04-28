@@ -1,6 +1,7 @@
 #include "sys/time.h"
 #include <ctype.h>
 #include <editline/readline.h>
+#include <limits.h>
 #include <locale.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -122,6 +123,17 @@ typedef struct {
   int history_length;
 } board_t;
 
+typedef struct {
+  // time left for current side for the entire game
+  int time_left;
+  // number of moves until next time control
+  int moves_to_go;
+  // restricted search depth
+  int depth;
+  // restricted time to make current move
+  int move_time;
+} search_info_t;
+
 const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
                                    0x2655, 0x2654, 0x265F, 0x265E,
                                    0x265D, 0x265C, 0x265B, 0x265A};
@@ -239,6 +251,9 @@ const int CASTLE_PERMISSIONS[64] = {
 // clang-format on
 
 const char FLAG_TO_ALGEBRAIC_NOTATION[6] = {'-', 'n', 'b', 'r', 'q', '-'};
+
+const int PIECE_VALUES[13] = {100, 300, 300, 500, 900,   10000, 100,
+                              300, 300, 500, 900, 10000, 0};
 
 typedef struct {
   uint64_t state;
@@ -428,6 +443,7 @@ uint64_t zobrist_add_piece(board_t *board, int square, piece_t piece) {
     break;
   default:
     printf("Tried to move piece from empty square!\n");
+    printf("FROM: %s\n", SQUARE_TO_READABLE[square]);
     exit(EXIT_FAILURE);
   }
 
@@ -1991,6 +2007,67 @@ void run_perft_suite() {
          precise_seconds);
 }
 
+int evaluate_position(board_t *board) {
+  int multiplier = board->side == WHITE ? 1 : -1;
+
+  int white_score = 0;
+  int black_score = 0;
+
+  for (int square = 0; square < 64; square++) {
+    piece_t piece = board->pieces[square];
+    if (piece == EMPTY) {
+      continue;
+    }
+
+    if (piece >= WHITE_PAWN && piece <= WHITE_KING) {
+      white_score += PIECE_VALUES[piece];
+    }
+
+    if (piece >= BLACK_PAWN && piece <= BLACK_KING) {
+      black_score += PIECE_VALUES[piece];
+    }
+  }
+
+  return (white_score - black_score) * multiplier;
+}
+
+int negamax(board_t *board, int depth, move_t *best_move) {
+  if (depth == 0) {
+    return evaluate_position(board);
+  }
+  int max = -INT_MAX;
+  move_list_t *move_list = move_list_new();
+  generate_all_moves(board, move_list);
+
+  for (size_t i = 0; i < move_list->count; i++) {
+    if (!make_move(board, move_list->moves[i])) {
+      unmake_move(board, move_list->moves[i]);
+      continue;
+    }
+
+    int score = -negamax(board, depth - 1, best_move);
+    if (score > max) {
+      max = score;
+      *best_move = move_list->moves[i];
+    }
+
+    unmake_move(board, move_list->moves[i]);
+  }
+  free(move_list);
+  return max;
+}
+
+void search_position(board_t *board, search_info_t *search_info) {
+  move_t best_move;
+  negamax(board, search_info->depth, &best_move);
+  printf("bestmove %s%s", SQUARE_TO_READABLE[best_move.from],
+         SQUARE_TO_READABLE[best_move.to]);
+  if (best_move.move_type == PROMOTION) {
+    printf("%c", FLAG_TO_ALGEBRAIC_NOTATION[best_move.flag]);
+  }
+  printf("\n");
+}
+
 move_t uci_parse_move(board_t *board, char *move_string) {
   while (isspace(*move_string)) {
     move_string++;
@@ -2103,32 +2180,36 @@ void uci_parse_position(board_t *board, char *position) {
     // the moves won't be undone, so no point storing them in history
     board->history_length = 0;
   }
-
-  board_print(board);
 }
 
-void uci_parse_go(board_t *board) {
-  move_list_t *move_list = move_list_new();
-  generate_all_moves(board, move_list);
+#define OBVIOUS_MOVE_FEN                                                       \
+  "rnb1kb1r/ppp1pppp/5n2/3q4/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4"
 
-  move_t move;
+void uci_parse_go(board_t *board, char *move_string) {
+  search_info_t search_info = {
+      .depth = -1, .time_left = -1, .moves_to_go = -1, .move_time = -1};
+  char *current = NULL;
 
-  for (size_t i = 0; i < move_list->count; i++) {
-    move = move_list->moves[i];
-    if (make_move(board, move)) {
-      unmake_move(board, move);
-      break;
-    }
-
-    unmake_move(board, move);
+  current = strstr(move_string, "depth");
+  if (current) {
+    search_info.depth = atoi(current + 6);
   }
 
-  printf("bestmove %s%s", SQUARE_TO_READABLE[move.from],
-         SQUARE_TO_READABLE[move.to]);
-  if (move.move_type == PROMOTION) {
-    printf("%c", FLAG_TO_ALGEBRAIC_NOTATION[move.flag]);
+  current = strstr(move_string, "wtime");
+  if (current && board->side == WHITE) {
+    search_info.time_left = atoi(current + 6);
   }
-  printf("\n");
+
+  current = strstr(move_string, "btime");
+  if (current && board->side == BLACK) {
+    search_info.time_left = atoi(current + 6);
+  }
+
+  if (search_info.depth == -1) {
+    search_info.depth = 64;
+  }
+
+  search_position(board, &search_info);
 }
 
 void uci_loop() {
@@ -2156,12 +2237,12 @@ void uci_loop() {
     } else if (strncmp(input, "position", 8) == 0) {
       uci_parse_position(board, input);
     } else if (strncmp(input, "go", 2) == 0) {
-      uci_parse_go(board);
+      uci_parse_go(board, input);
     }
   }
 }
 
-int main() {
+void main_loop() {
   while (1) {
     char *input = readline(NULL);
     add_history(input);
@@ -2171,6 +2252,9 @@ int main() {
       break;
     }
   }
+}
 
+int main() {
+  main_loop();
   return EXIT_SUCCESS;
 }
