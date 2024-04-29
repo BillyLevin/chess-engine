@@ -126,14 +126,17 @@ typedef struct {
 } board_t;
 
 typedef struct {
-  // time left for current side for the entire game
+  // uci arguments
   int time_left;
-  // number of moves until next time control
   int moves_to_go;
-  // restricted search depth
-  int depth;
-  // restricted time to make current move
   int move_time;
+  int depth;
+
+  // calculated search info
+  bool stopped;
+  int stop_time;
+  uint64_t nodes_searched;
+
 } search_info_t;
 
 const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
@@ -256,6 +259,8 @@ const char FLAG_TO_ALGEBRAIC_NOTATION[6] = {'-', 'n', 'b', 'r', 'q', '-'};
 
 const int PIECE_VALUES[13] = {100, 300, 300, 500, 900,   10000, 100,
                               300, 300, 500, 900, 10000, 0};
+
+const int MAX_SEARCH_DEPTH = 64;
 
 typedef struct {
   uint64_t state;
@@ -2038,9 +2043,25 @@ int evaluate_position(board_t *board) {
   return (white_score - black_score) * multiplier;
 }
 
-int negamax(board_t *board, int depth, move_t *best_move) {
+void check_search_time(search_info_t *info) {
+  if (get_time_ms() > info->stop_time) {
+    info->stopped = true;
+  }
+}
+
+int negamax(board_t *board, int depth, move_t *best_move,
+            search_info_t *search_info) {
+  search_info->nodes_searched++;
+
   if (depth == 0) {
     return evaluate_position(board);
+  }
+
+  // check move time expiry every 2048 nodes
+  check_search_time(search_info);
+
+  if (search_info->stopped) {
+    return 0;
   }
 
   int max = -INT_MAX;
@@ -2053,7 +2074,7 @@ int negamax(board_t *board, int depth, move_t *best_move) {
       continue;
     }
 
-    int score = -negamax(board, depth - 1, best_move);
+    int score = -negamax(board, depth - 1, best_move, search_info);
     unmake_move(board, move_list->moves[i]);
     if (score > max) {
       max = score;
@@ -2072,9 +2093,23 @@ void search_position(board_t *board, search_info_t *search_info) {
 
   move_t best_move;
 
-  for (int depth = 1; depth <= search_info->depth; depth++) {
-    negamax(board, search_info->depth, &best_move);
-  }
+  // for (depth = 1; depth <= search_info->depth; depth++) {
+  //   int start_time = get_time_ms();
+  negamax(board, search_info->depth, &best_move, search_info);
+  // int end_time = get_time_ms() - start_time;
+
+  // if (search_info->stopped) {
+  //   break;
+  // }
+
+  // total_time += end_time;
+
+  // uint64_t nodes_per_second =
+  //     1000 * (float)search_info->nodes_searched / (float)end_time;
+  //
+  // printf("info depth %d nodes %lu nps %lu time %lu\n", depth,
+  //        search_info->nodes_searched, nodes_per_second, total_time);
+  // }
 
   printf("bestmove %s%s", SQUARE_TO_READABLE[best_move.from],
          SQUARE_TO_READABLE[best_move.to]);
@@ -2198,14 +2233,46 @@ void uci_parse_position(board_t *board, char *position) {
   }
 }
 
+void start_search_timer(search_info_t *info) {
+  info->stopped = false;
+  info->nodes_searched = 0;
+
+  int start_time = get_time_ms();
+
+  if (info->move_time != -1) {
+    info->stop_time = start_time + info->move_time;
+    return;
+  }
+
+  info->stop_time = start_time + (info->time_left / 30);
+}
+
+search_info_t search_info_new() {
+  search_info_t search_info;
+
+  // uci arguments
+  search_info.time_left = -1;
+  search_info.moves_to_go = -1;
+  search_info.move_time = -1;
+  search_info.depth = -1;
+
+  // calculated search info
+  search_info.stopped = false;
+  search_info.stop_time = -1;
+  search_info.nodes_searched = 0ULL;
+
+  return search_info;
+}
+
 void uci_parse_go(board_t *board, char *move_string) {
-  search_info_t search_info = {
-      .depth = -1, .time_left = -1, .moves_to_go = -1, .move_time = -1};
+  search_info_t search_info = search_info_new();
   char *current = NULL;
 
   current = strstr(move_string, "depth");
   if (current) {
     search_info.depth = atoi(current + 6);
+  } else {
+    search_info.depth = MAX_SEARCH_DEPTH;
   }
 
   current = strstr(move_string, "wtime");
@@ -2218,10 +2285,12 @@ void uci_parse_go(board_t *board, char *move_string) {
     search_info.time_left = atoi(current + 6);
   }
 
-  if (search_info.depth == -1) {
-    search_info.depth = 5;
+  current = strstr(move_string, "movetime");
+  if (current && board->side == BLACK) {
+    search_info.move_time = atoi(current + 9);
   }
 
+  start_search_timer(&search_info);
   search_position(board, &search_info);
 }
 
