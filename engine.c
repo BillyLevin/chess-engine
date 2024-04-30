@@ -261,6 +261,7 @@ const int PIECE_VALUES[13] = {100, 300, 300, 500, 900,   10000, 100,
                               300, 300, 500, 900, 10000, 0};
 
 const int MAX_SEARCH_DEPTH = 64;
+const int INFINITE_SEARCH_TIME = -1;
 
 typedef struct {
   uint64_t state;
@@ -2044,6 +2045,11 @@ int evaluate_position(board_t *board) {
 }
 
 void check_search_time(search_info_t *info) {
+  if (info->time_left == INFINITE_SEARCH_TIME &&
+      info->move_time == INFINITE_SEARCH_TIME) {
+    return;
+  }
+
   if (get_time_ms() > info->stop_time) {
     info->stopped = true;
   }
@@ -2061,6 +2067,7 @@ int negamax(board_t *board, int depth, move_t *best_move,
   check_search_time(search_info);
 
   if (search_info->stopped) {
+    printf("GOT HERE :(\n");
     return 0;
   }
 
@@ -2244,17 +2251,17 @@ void start_search_timer(search_info_t *info) {
     return;
   }
 
-  info->stop_time = start_time + (info->time_left / 30);
+  info->stop_time = start_time + (info->time_left / 10);
 }
 
 search_info_t search_info_new() {
   search_info_t search_info;
 
   // uci arguments
-  search_info.time_left = -1;
+  search_info.time_left = INFINITE_SEARCH_TIME;
   search_info.moves_to_go = -1;
-  search_info.move_time = -1;
-  search_info.depth = -1;
+  search_info.move_time = INFINITE_SEARCH_TIME;
+  search_info.depth = MAX_SEARCH_DEPTH;
 
   // calculated search info
   search_info.stopped = false;
