@@ -1593,6 +1593,15 @@ void generate_all_moves(const board_t *board, move_list_t *move_list) {
   generate_castling_moves(board, move_list);
 }
 
+bool is_in_check(board_t *board, side_t side) {
+  uint64_t king_bitboard =
+      side == WHITE ? board->white_king : board->black_king;
+
+  square_t king_position = __builtin_ctzll(get_lsb(king_bitboard));
+
+  return is_square_attacked(king_position, board, board->side);
+}
+
 bool make_move(board_t *board, move_t move) {
   history_item_t irreversible_state = {
       .hash = board->hash,
@@ -1735,15 +1744,7 @@ bool make_move(board_t *board, move_t move) {
 
   board->ply++;
 
-  uint64_t king_bitboard =
-      board->side == WHITE ? board->black_king : board->white_king;
-
-  square_t king_position = __builtin_ctzll(get_lsb(king_bitboard));
-
-  // illegal moves return false
-  // here, we are checking if we left our king in check with our move, which
-  // would make it illegal
-  return !is_square_attacked(king_position, board, board->side);
+  return !is_in_check(board, board->side ^ 1);
 }
 
 void unmake_move(board_t *board, move_t move) {
@@ -2064,16 +2065,19 @@ int negamax(board_t *board, int depth, move_t *best_move,
   }
 
   // check move time expiry every 2048 nodes
-  check_search_time(search_info);
+  if ((search_info->nodes_searched & 2047) == 0) {
+    check_search_time(search_info);
+  }
 
   if (search_info->stopped) {
-    printf("GOT HERE :(\n");
     return 0;
   }
 
   int max = -INT_MAX;
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
+
+  size_t legal_move_count = 0;
 
   for (size_t i = 0; i < move_list->count; i++) {
     if (!make_move(board, move_list->moves[i])) {
@@ -2090,33 +2094,57 @@ int negamax(board_t *board, int depth, move_t *best_move,
         *best_move = move_list->moves[i];
       }
     }
+
+    legal_move_count++;
   }
+
+  // checkmate or stalemate
+  if (legal_move_count == 0) {
+    if (is_in_check(board, board->side)) {
+      return (-INT_MAX + board->ply);
+    } else {
+      return 0;
+    }
+  }
+
   free(move_list);
   return max;
 }
 
+// TODO: this is bad
+// can get rid when change moves to be integers
+const move_t NULL_MOVE = {
+    .from = 64, .to = 64, .flag = NO_FLAG, .move_type = QUIET};
+
 void search_position(board_t *board, search_info_t *search_info) {
   board->ply = 0;
 
-  move_t best_move;
+  move_t best_move = NULL_MOVE;
+  uint64_t total_time = 0ULL;
 
-  // for (depth = 1; depth <= search_info->depth; depth++) {
-  //   int start_time = get_time_ms();
-  negamax(board, search_info->depth, &best_move, search_info);
-  // int end_time = get_time_ms() - start_time;
+  for (int depth = 1; depth <= search_info->depth; depth++) {
+    move_t current_best_move;
+    int start_time = get_time_ms();
+    int score = negamax(board, depth, &current_best_move, search_info);
+    int end_time = get_time_ms() - start_time;
 
-  // if (search_info->stopped) {
-  //   break;
-  // }
+    if (search_info->stopped) {
+      if (depth == 1) {
+        best_move = current_best_move;
+      }
+      break;
+    }
 
-  // total_time += end_time;
+    best_move = current_best_move;
 
-  // uint64_t nodes_per_second =
-  //     1000 * (float)search_info->nodes_searched / (float)end_time;
-  //
-  // printf("info depth %d nodes %lu nps %lu time %lu\n", depth,
-  //        search_info->nodes_searched, nodes_per_second, total_time);
-  // }
+    total_time += end_time;
+
+    uint64_t nodes_per_second =
+        1000 * (float)search_info->nodes_searched / (float)end_time;
+
+    printf("info depth %d score %d nodes %lu nps %lu time %lu\n", depth, score,
+           search_info->nodes_searched, nodes_per_second, total_time);
+  }
 
   printf("bestmove %s%s", SQUARE_TO_READABLE[best_move.from],
          SQUARE_TO_READABLE[best_move.to]);
