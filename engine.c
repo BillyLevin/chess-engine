@@ -2279,7 +2279,7 @@ void start_search_timer(search_info_t *info) {
     return;
   }
 
-  info->stop_time = start_time + (info->time_left / 10);
+  info->stop_time = start_time + (info->time_left / 30);
 }
 
 search_info_t search_info_new() {
