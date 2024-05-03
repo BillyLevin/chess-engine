@@ -257,7 +257,7 @@ const int CASTLE_PERMISSIONS[64] = {
 };
 // clang-format on
 
-const char FLAG_TO_ALGEBRAIC_NOTATION[6] = {'-', 'n', 'b', 'r', 'q', '-'};
+const char FLAG_TO_ALGEBRAIC_NOTATION[4] = {'n', 'b', 'r', 'q'};
 
 const int PIECE_VALUES[13] = {100, 300, 300, 500, 900,   10000, 100,
                               300, 300, 500, 900, 10000, 0};
