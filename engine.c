@@ -2139,11 +2139,8 @@ void search_position(board_t *board, search_info_t *search_info) {
 
     total_time += end_time;
 
-    uint64_t nodes_per_second =
-        1000 * (float)search_info->nodes_searched / (float)end_time;
-
-    printf("info depth %d score %d nodes %lu nps %lu time %lu\n", depth, score,
-           search_info->nodes_searched, nodes_per_second, total_time);
+    printf("info depth %d score %d nodes %lu time %lu\n", depth, score,
+           search_info->nodes_searched, total_time);
   }
 
   printf("bestmove %s%s", SQUARE_TO_READABLE[best_move.from],
