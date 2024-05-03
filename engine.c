@@ -12,6 +12,8 @@
 
 typedef enum { WHITE, BLACK } side_t;
 
+#define INFINITY 100000
+
 enum {
   WHITE_KING_CASTLE = 1,
   WHITE_QUEEN_CASTLE = 2,
@@ -2056,7 +2058,7 @@ void check_search_time(search_info_t *info) {
   }
 }
 
-int negamax(board_t *board, int depth, move_t *best_move,
+int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
             search_info_t *search_info) {
   search_info->nodes_searched++;
 
@@ -2073,7 +2075,7 @@ int negamax(board_t *board, int depth, move_t *best_move,
     return 0;
   }
 
-  int max = -INT_MAX;
+  int max = -INFINITY;
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
 
@@ -2085,13 +2087,23 @@ int negamax(board_t *board, int depth, move_t *best_move,
       continue;
     }
 
-    int score = -negamax(board, depth - 1, best_move, search_info);
+    int score =
+        -negamax(board, depth - 1, -beta, -alpha, best_move, search_info);
     unmake_move(board, move_list->moves[i]);
+
+    if (score >= beta) {
+      free(move_list);
+      return beta;
+    }
+
     if (score > max) {
       max = score;
 
-      if (board->ply == 0) {
-        *best_move = move_list->moves[i];
+      if (score > alpha) {
+        alpha = score;
+        if (board->ply == 0) {
+          *best_move = move_list->moves[i];
+        }
       }
     }
 
@@ -2101,14 +2113,14 @@ int negamax(board_t *board, int depth, move_t *best_move,
   // checkmate or stalemate
   if (legal_move_count == 0) {
     if (is_in_check(board, board->side)) {
-      return (-INT_MAX + board->ply);
+      return -INFINITY + board->ply;
     } else {
       return 0;
     }
   }
 
   free(move_list);
-  return max;
+  return alpha;
 }
 
 // TODO: this is bad
@@ -2125,7 +2137,8 @@ void search_position(board_t *board, search_info_t *search_info) {
   for (int depth = 1; depth <= search_info->depth; depth++) {
     move_t current_best_move;
     int start_time = get_time_ms();
-    int score = negamax(board, depth, &current_best_move, search_info);
+    int score = negamax(board, depth, -INFINITY, INFINITY, &current_best_move,
+                        search_info);
     int end_time = get_time_ms() - start_time;
 
     if (search_info->stopped) {
