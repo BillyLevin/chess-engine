@@ -1,7 +1,6 @@
 #include "sys/time.h"
 #include <ctype.h>
 #include <editline/readline.h>
-#include <limits.h>
 #include <locale.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -61,22 +60,23 @@ typedef enum {
   EMPTY,
 } piece_t;
 
-typedef enum { QUIET, CAPTURE, CASTLE, PROMOTION } move_type_t;
-typedef enum {
-  NO_FLAG,
-  KNIGHT_PROMOTION,
-  BISHOP_PROMOTION,
-  ROOK_PROMOTION,
-  QUEEN_PROMOTION,
-  EN_PASSANT,
-} move_flag_t;
+// MOVE TYPES
+#define QUIET 0
+#define CAPTURE 1
+#define CASTLE 2
+#define PROMOTION 3
 
-typedef struct {
-  square_t from;
-  square_t to;
-  move_type_t move_type;
-  move_flag_t flag;
-} move_t;
+// MOVE FLAGS
+// we can have multiple flags with the same value, because they only get checked
+// depending on the move type
+const uint8_t NO_FLAG = 0;
+const uint8_t EN_PASSANT_FLAG = 1;
+const uint8_t KNIGHT_PROMOTION = 0;
+const uint8_t BISHOP_PROMOTION = 1;
+const uint8_t ROOK_PROMOTION = 2;
+const uint8_t QUEEN_PROMOTION = 3;
+
+typedef uint16_t move_t;
 
 typedef struct {
   move_t moves[512];
@@ -877,11 +877,14 @@ int bitboard_pop_bit(uint64_t *bitboard) {
   return square;
 }
 
-move_t move_new(square_t from, square_t to, move_type_t move_type,
-                move_flag_t flag) {
-  move_t move = {.from = from, .to = to, .move_type = move_type, .flag = flag};
-  return move;
+move_t move_new(int from, int to, int move_type, int flag) {
+  return (from | (to << 6) | (move_type << 12) | (flag << 14));
 }
+
+uint8_t move_from(move_t move) { return (move & 0x3F); }
+uint8_t move_to(move_t move) { return ((move >> 6) & 0x3F); }
+uint8_t move_move_type(move_t move) { return ((move >> 12) & 0x03); }
+uint8_t move_flag(move_t move) { return ((move >> 14) & 0x03); }
 
 move_list_t *move_list_new() {
   move_list_t *move_list = malloc(sizeof(move_list_t));
@@ -901,11 +904,12 @@ void move_list_print(move_list_t *move_list) {
 
     printf("From: %s, to: %s, capture: %s, promotion: %s, en passant: %s, "
            "castling: %s\n",
-           SQUARE_TO_READABLE[move.from], SQUARE_TO_READABLE[move.to],
-           move.move_type == CAPTURE ? "yes" : "no",
-           move.move_type == PROMOTION ? "yes" : "no",
-           move.flag == EN_PASSANT ? "yes" : "no",
-           move.move_type == CASTLE ? "yes" : "no");
+           SQUARE_TO_READABLE[move_from(move)],
+           SQUARE_TO_READABLE[move_to(move)],
+           move_move_type(move) == CAPTURE ? "yes" : "no",
+           move_move_type(move) == PROMOTION ? "yes" : "no",
+           move_flag(move) == EN_PASSANT_FLAG ? "yes" : "no",
+           move_move_type(move) == CASTLE ? "yes" : "no");
   }
   printf("\nTotal moves: %zu\n", move_list->count);
 }
@@ -973,7 +977,7 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
           move_list_push(move_list,
                          move_new(from_square, attacked_square, CAPTURE,
                                   attacked_square == board->en_passant_square
-                                      ? EN_PASSANT
+                                      ? EN_PASSANT_FLAG
                                       : NO_FLAG));
         }
       }
@@ -1034,7 +1038,7 @@ void generate_pawn_moves(const board_t *board, move_list_t *move_list) {
           move_list_push(move_list,
                          move_new(from_square, attacked_square, CAPTURE,
                                   attacked_square == board->en_passant_square
-                                      ? EN_PASSANT
+                                      ? EN_PASSANT_FLAG
                                       : NO_FLAG));
         }
       }
@@ -1610,8 +1614,8 @@ bool make_move(board_t *board, move_t move) {
       .castle_rights = board->castle_rights,
       .en_passant_square = board->en_passant_square,
       .halfmove_clock = board->halfmove_clock,
-      .moved_piece = board->pieces[move.from],
-      .captured_piece = board->pieces[move.to]};
+      .moved_piece = board->pieces[move_from(move)],
+      .captured_piece = board->pieces[move_to(move)]};
 
   board->halfmove_clock++;
 
@@ -1620,26 +1624,26 @@ bool make_move(board_t *board, move_t move) {
   board->hash ^= zobrist_en_passant_file(board->en_passant_square);
   board->en_passant_square = NO_SQUARE;
 
-  board->hash ^= zobrist_remove_piece(board, move.from);
+  board->hash ^= zobrist_remove_piece(board, move_from(move));
 
-  switch (move.move_type) {
+  switch (move_move_type(move)) {
   case QUIET:
     board->hash ^=
-        zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
+        zobrist_add_piece(board, move_to(move), irreversible_state.moved_piece);
     break;
   case CAPTURE: {
-    if (move.flag == EN_PASSANT) {
+    if (move_flag(move) == EN_PASSANT_FLAG) {
       square_t captured_square =
-          board->side == WHITE ? (move.to - 8) : (move.to + 8);
+          board->side == WHITE ? (move_to(move) - 8) : (move_to(move) + 8);
       irreversible_state.captured_piece = board->pieces[captured_square];
 
       board->hash ^= zobrist_remove_piece(board, captured_square);
-      board->hash ^=
-          zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
+      board->hash ^= zobrist_add_piece(board, move_to(move),
+                                       irreversible_state.moved_piece);
     } else {
-      board->hash ^= zobrist_remove_piece(board, move.to);
-      board->hash ^=
-          zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
+      board->hash ^= zobrist_remove_piece(board, move_to(move));
+      board->hash ^= zobrist_add_piece(board, move_to(move),
+                                       irreversible_state.moved_piece);
     }
     break;
   }
@@ -1647,16 +1651,16 @@ bool make_move(board_t *board, move_t move) {
     square_t rook_from_square;
     square_t rook_to_square;
 
-    if (move.to == G1) {
+    if (move_to(move) == G1) {
       rook_from_square = H1;
       rook_to_square = F1;
-    } else if (move.to == C1) {
+    } else if (move_to(move) == C1) {
       rook_from_square = A1;
       rook_to_square = D1;
-    } else if (move.to == G8) {
+    } else if (move_to(move) == G8) {
       rook_from_square = H8;
       rook_to_square = F8;
-    } else if (move.to == C8) {
+    } else if (move_to(move) == C8) {
       rook_from_square = A8;
       rook_to_square = D8;
     } else {
@@ -1666,7 +1670,7 @@ bool make_move(board_t *board, move_t move) {
 
     // move the king
     board->hash ^=
-        zobrist_add_piece(board, move.to, irreversible_state.moved_piece);
+        zobrist_add_piece(board, move_to(move), irreversible_state.moved_piece);
 
     // move the rook
     board->hash ^= zobrist_add_piece(
@@ -1677,24 +1681,24 @@ bool make_move(board_t *board, move_t move) {
   }
   case PROMOTION: {
     if (irreversible_state.captured_piece != EMPTY) {
-      board->hash ^= zobrist_remove_piece(board, move.to);
+      board->hash ^= zobrist_remove_piece(board, move_to(move));
     }
 
     piece_t promotion_piece = EMPTY;
 
-    if (move.flag == KNIGHT_PROMOTION) {
+    if (move_flag(move) == KNIGHT_PROMOTION) {
       promotion_piece = board->side == WHITE ? WHITE_KNIGHT : BLACK_KNIGHT;
     }
 
-    if (move.flag == BISHOP_PROMOTION) {
+    if (move_flag(move) == BISHOP_PROMOTION) {
       promotion_piece = board->side == WHITE ? WHITE_BISHOP : BLACK_BISHOP;
     }
 
-    if (move.flag == ROOK_PROMOTION) {
+    if (move_flag(move) == ROOK_PROMOTION) {
       promotion_piece = board->side == WHITE ? WHITE_ROOK : BLACK_ROOK;
     }
 
-    if (move.flag == QUEEN_PROMOTION) {
+    if (move_flag(move) == QUEEN_PROMOTION) {
       promotion_piece = board->side == WHITE ? WHITE_QUEEN : BLACK_QUEEN;
     }
 
@@ -1703,7 +1707,7 @@ bool make_move(board_t *board, move_t move) {
       exit(EXIT_FAILURE);
     }
 
-    board->hash ^= zobrist_add_piece(board, move.to, promotion_piece);
+    board->hash ^= zobrist_add_piece(board, move_to(move), promotion_piece);
     break;
   }
   }
@@ -1714,9 +1718,9 @@ bool make_move(board_t *board, move_t move) {
     board->halfmove_clock = 0;
 
     // double pawn push
-    if (abs((int8_t)(move.from) - (int8_t)(move.to)) == 16) {
+    if (abs((int8_t)(move_from(move)) - (int8_t)(move_to(move))) == 16) {
       board->en_passant_square =
-          board->side == WHITE ? (move.from + 8) : (move.from - 8);
+          board->side == WHITE ? (move_from(move) + 8) : (move_from(move) - 8);
 
       // we only set en passant square if a pawn can actually capture, as per
       // https://github.com/fsmosca/PGN-Standard/blob/61a82dab3ff62d79dea82c15a8cc773f80f3a91e/PGN-Standard.txt#L2231-L2242
@@ -1730,8 +1734,9 @@ bool make_move(board_t *board, move_t move) {
   }
 
   board->hash ^= zobrist_castle(board->castle_rights);
-  board->castle_rights = board->castle_rights & CASTLE_PERMISSIONS[move.from] &
-                         CASTLE_PERMISSIONS[move.to];
+  board->castle_rights = board->castle_rights &
+                         CASTLE_PERMISSIONS[move_from(move)] &
+                         CASTLE_PERMISSIONS[move_to(move)];
   board->hash ^= zobrist_castle(board->castle_rights);
 
   if (board->en_passant_square != NO_SQUARE) {
@@ -1762,22 +1767,22 @@ void unmake_move(board_t *board, move_t move) {
 
   board->side ^= 1;
 
-  zobrist_add_piece(board, move.from, move_state.moved_piece);
+  zobrist_add_piece(board, move_from(move), move_state.moved_piece);
 
-  switch (move.move_type) {
+  switch (move_move_type(move)) {
   case QUIET:
-    zobrist_remove_piece(board, move.to);
+    zobrist_remove_piece(board, move_to(move));
     break;
   case CAPTURE: {
-    if (move.flag == EN_PASSANT) {
+    if (move_flag(move) == EN_PASSANT_FLAG) {
       square_t captured_square =
-          board->side == WHITE ? (move.to - 8) : (move.to + 8);
+          board->side == WHITE ? (move_to(move) - 8) : (move_to(move) + 8);
 
-      zobrist_remove_piece(board, move.to);
+      zobrist_remove_piece(board, move_to(move));
       zobrist_add_piece(board, captured_square, move_state.captured_piece);
     } else {
-      zobrist_remove_piece(board, move.to);
-      zobrist_add_piece(board, move.to, move_state.captured_piece);
+      zobrist_remove_piece(board, move_to(move));
+      zobrist_add_piece(board, move_to(move), move_state.captured_piece);
     }
     break;
   }
@@ -1785,16 +1790,16 @@ void unmake_move(board_t *board, move_t move) {
     square_t rook_from_square;
     square_t rook_to_square;
 
-    if (move.to == G1) {
+    if (move_to(move) == G1) {
       rook_from_square = H1;
       rook_to_square = F1;
-    } else if (move.to == C1) {
+    } else if (move_to(move) == C1) {
       rook_from_square = A1;
       rook_to_square = D1;
-    } else if (move.to == G8) {
+    } else if (move_to(move) == G8) {
       rook_from_square = H8;
       rook_to_square = F8;
-    } else if (move.to == C8) {
+    } else if (move_to(move) == C8) {
       rook_from_square = A8;
       rook_to_square = D8;
     } else {
@@ -1803,7 +1808,7 @@ void unmake_move(board_t *board, move_t move) {
     }
 
     // remove the king
-    zobrist_remove_piece(board, move.to);
+    zobrist_remove_piece(board, move_to(move));
 
     // move the rook back
     zobrist_remove_piece(board, rook_to_square);
@@ -1812,9 +1817,9 @@ void unmake_move(board_t *board, move_t move) {
     break;
   }
   case PROMOTION: {
-    zobrist_remove_piece(board, move.to);
+    zobrist_remove_piece(board, move_to(move));
     if (move_state.captured_piece != EMPTY) {
-      zobrist_add_piece(board, move.to, move_state.captured_piece);
+      zobrist_add_piece(board, move_to(move), move_state.captured_piece);
     }
     break;
   }
@@ -1923,8 +1928,8 @@ int get_time_ms() {
 //       uint64_t old_nodes = nodes;
 //       nodes += perft(board, depth - 1, table);
 //       printf("move %d : %s%s : %ld\n", move_num,
-//       SQUARE_TO_READABLE[move.from],
-//              SQUARE_TO_READABLE[move.to], nodes - old_nodes);
+//       SQUARE_TO_READABLE[move_from(move)],
+//              SQUARE_TO_READABLE[move_to(move)], nodes - old_nodes);
 //     }
 //
 //     unmake_move(board, move);
@@ -2123,15 +2128,10 @@ int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
   return alpha;
 }
 
-// TODO: this is bad
-// can get rid when change moves to be integers
-const move_t NULL_MOVE = {
-    .from = 64, .to = 64, .flag = NO_FLAG, .move_type = QUIET};
-
 void search_position(board_t *board, search_info_t *search_info) {
   board->ply = 0;
 
-  move_t best_move = NULL_MOVE;
+  move_t best_move = 0;
   uint64_t total_time = 0ULL;
 
   for (int depth = 1; depth <= search_info->depth; depth++) {
@@ -2156,10 +2156,10 @@ void search_position(board_t *board, search_info_t *search_info) {
            search_info->nodes_searched, total_time);
   }
 
-  printf("bestmove %s%s", SQUARE_TO_READABLE[best_move.from],
-         SQUARE_TO_READABLE[best_move.to]);
-  if (best_move.move_type == PROMOTION) {
-    printf("%c", FLAG_TO_ALGEBRAIC_NOTATION[best_move.flag]);
+  printf("bestmove %s%s", SQUARE_TO_READABLE[move_from(best_move)],
+         SQUARE_TO_READABLE[move_to(best_move)]);
+  if (move_move_type(best_move) == PROMOTION) {
+    printf("%c", FLAG_TO_ALGEBRAIC_NOTATION[move_flag(best_move)]);
   }
   printf("\n");
 }
@@ -2198,21 +2198,21 @@ move_t uci_parse_move(board_t *board, char *move_string) {
   for (size_t i = 0; i < move_list->count; i++) {
     move_t move = move_list->moves[i];
 
-    if (move.from == from && move.to == to) {
-      if (move.move_type == PROMOTION) {
-        if (move.flag == KNIGHT_PROMOTION && move_string[4] == 'n') {
+    if (move_from(move) == from && move_to(move) == to) {
+      if (move_move_type(move) == PROMOTION) {
+        if (move_flag(move) == KNIGHT_PROMOTION && move_string[4] == 'n') {
           return move;
         }
 
-        if (move.flag == BISHOP_PROMOTION && move_string[4] == 'b') {
+        if (move_flag(move) == BISHOP_PROMOTION && move_string[4] == 'b') {
           return move;
         }
 
-        if (move.flag == ROOK_PROMOTION && move_string[4] == 'r') {
+        if (move_flag(move) == ROOK_PROMOTION && move_string[4] == 'r') {
           return move;
         }
 
-        if (move.flag == QUEEN_PROMOTION && move_string[4] == 'q') {
+        if (move_flag(move) == QUEEN_PROMOTION && move_string[4] == 'q') {
           return move;
         }
       } else {
