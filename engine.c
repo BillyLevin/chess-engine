@@ -12,6 +12,7 @@
 typedef enum { WHITE, BLACK } side_t;
 
 #define INFINITY 30000
+#define CHECKMATE 29000
 
 enum {
   WHITE_KING_CASTLE = 1,
@@ -2128,6 +2129,24 @@ int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
   return alpha;
 }
 
+char *uci_get_score(int score) {
+  char *score_string = malloc(64);
+
+  if (score > CHECKMATE) {
+    int ply_to_mate = INFINITY - score;
+    int mate_in = ply_to_mate / 2 + ply_to_mate % 2;
+    sprintf(score_string, "mate %d", mate_in);
+  } else if (score < -CHECKMATE) {
+    int ply_to_mate = -INFINITY - score;
+    int mate_in = ply_to_mate / 2 + ply_to_mate % 2;
+    sprintf(score_string, "mate %d", mate_in);
+  } else {
+    sprintf(score_string, "cp %d", score);
+  }
+
+  return score_string;
+}
+
 void search_position(board_t *board, search_info_t *search_info) {
   board->ply = 0;
 
@@ -2152,8 +2171,8 @@ void search_position(board_t *board, search_info_t *search_info) {
 
     total_time += end_time;
 
-    printf("info depth %d score %d nodes %lu time %lu\n", depth, score,
-           search_info->nodes_searched, total_time);
+    printf("info depth %d score %s nodes %lu time %lu\n", depth,
+           uci_get_score(score), search_info->nodes_searched, total_time);
   }
 
   printf("bestmove %s%s", SQUARE_TO_READABLE[move_from(best_move)],
