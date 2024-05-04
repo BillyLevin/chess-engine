@@ -11,7 +11,7 @@
 
 typedef enum { WHITE, BLACK } side_t;
 
-#define INFINITY 100000
+#define INFINITY 30000
 
 enum {
   WHITE_KING_CASTLE = 1,
@@ -1605,7 +1605,7 @@ bool is_in_check(board_t *board, side_t side) {
 
   square_t king_position = __builtin_ctzll(get_lsb(king_bitboard));
 
-  return is_square_attacked(king_position, board, board->side);
+  return is_square_attacked(king_position, board, side ^ 1);
 }
 
 bool make_move(board_t *board, move_t move) {
