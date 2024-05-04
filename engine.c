@@ -1832,10 +1832,20 @@ void init_all() {
   init_zobrist_hash();
 }
 
+#define TT_PERFT_FLAG 0
+#define TT_ALPHA_FLAG 1
+#define TT_BETA_FLAG 2
+#define TT_EXACT_FLAG 3
+
 typedef struct {
   uint64_t hash;
   uint64_t nodes;
   int depth;
+
+  // only used in search (not perft)
+  int score;
+  uint8_t flag;
+  uint64_t best_move;
 } transposition_table_entry_t;
 
 typedef struct {
@@ -1861,11 +1871,61 @@ transposition_table_probe(transposition_table_t *table, uint64_t hash) {
 }
 
 void transposition_table_store(transposition_table_t *table, uint64_t hash,
-                               uint64_t nodes, int depth) {
+                               uint64_t nodes, int depth, int ply, int score,
+                               uint64_t best_move, uint8_t flag) {
+  if (score > CHECKMATE) {
+    score += ply;
+  }
+
+  if (score < -CHECKMATE) {
+    score -= -ply;
+  }
+
   size_t index = hash % table->size;
+
   table->entries[index].nodes = nodes;
   table->entries[index].hash = hash;
   table->entries[index].depth = depth;
+
+  table->entries[index].score = score;
+  table->entries[index].best_move = best_move;
+  table->entries[index].flag = flag;
+}
+
+// attempts to read from and populate values from TT entry
+// returns true if it succeeds
+bool transposition_table_entry_get(transposition_table_entry_t *entry,
+                                   uint64_t hash, int depth, int ply, int alpha,
+                                   int beta, int *score) {
+  if (entry->hash == hash) {
+    if (entry->depth >= depth) {
+      *score = entry->score;
+
+      if (*score > CHECKMATE) {
+        *score -= ply;
+      }
+
+      if (*score < -CHECKMATE) {
+        *score += ply;
+      }
+
+      if (entry->flag == TT_ALPHA_FLAG && *score <= alpha) {
+        *score = alpha;
+        return true;
+      }
+
+      if (entry->flag == TT_BETA_FLAG && *score >= beta) {
+        *score = beta;
+        return true;
+      }
+
+      if (entry->flag == TT_EXACT_FLAG) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 uint64_t perft(board_t *board, int depth, transposition_table_t *table) {
@@ -1896,7 +1956,8 @@ uint64_t perft(board_t *board, int depth, transposition_table_t *table) {
     unmake_move(board, move);
   }
 
-  transposition_table_store(table, board->hash, nodes, depth);
+  transposition_table_store(table, board->hash, nodes, depth, 0, 0, 0ULL,
+                            TT_PERFT_FLAG);
 
   free(move_list);
 
@@ -1953,7 +2014,7 @@ void run_perft_suite() {
   uint64_t nodes[256];
   size_t line_count = 0;
 
-  transposition_table_t *table = transposition_table_new(64);
+  transposition_table_t *table = transposition_table_new(128);
 
   int start = get_time_ms();
 
@@ -2064,8 +2125,8 @@ void check_search_time(search_info_t *info) {
   }
 }
 
-int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
-            search_info_t *search_info) {
+int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
+            int beta, move_t *best_move, search_info_t *search_info) {
   search_info->nodes_searched++;
 
   if (depth == 0) {
@@ -2081,7 +2142,18 @@ int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
     return 0;
   }
 
-  int max = -INFINITY;
+  int best_score = -INFINITY;
+
+  transposition_table_entry_t *tt_entry =
+      transposition_table_probe(tt, board->hash);
+
+  if (transposition_table_entry_get(tt_entry, board->hash, depth, board->ply,
+                                    alpha, beta, &best_score)) {
+    return best_score;
+  }
+
+  int old_alpha = alpha;
+
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
 
@@ -2094,16 +2166,19 @@ int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
     }
 
     int score =
-        -negamax(board, depth - 1, -beta, -alpha, best_move, search_info);
+        -negamax(board, tt, depth - 1, -beta, -alpha, best_move, search_info);
     unmake_move(board, move_list->moves[i]);
 
     if (score >= beta) {
+      transposition_table_store(tt, board->hash, 0, depth, board->ply,
+                                best_score, *best_move, TT_BETA_FLAG);
+
       free(move_list);
       return beta;
     }
 
-    if (score > max) {
-      max = score;
+    if (score > best_score) {
+      best_score = score;
 
       if (score > alpha) {
         alpha = score;
@@ -2125,8 +2200,12 @@ int negamax(board_t *board, int depth, int alpha, int beta, move_t *best_move,
     }
   }
 
+  transposition_table_store(tt, board->hash, 0, depth, board->ply, best_score,
+                            *best_move,
+                            old_alpha != alpha ? TT_EXACT_FLAG : TT_ALPHA_FLAG);
+
   free(move_list);
-  return alpha;
+  return best_score;
 }
 
 char *uci_get_score(int score) {
@@ -2147,7 +2226,8 @@ char *uci_get_score(int score) {
   return score_string;
 }
 
-void search_position(board_t *board, search_info_t *search_info) {
+void search_position(board_t *board, search_info_t *search_info,
+                     transposition_table_t *tt) {
   board->ply = 0;
 
   move_t best_move = 0;
@@ -2156,8 +2236,8 @@ void search_position(board_t *board, search_info_t *search_info) {
   for (int depth = 1; depth <= search_info->depth; depth++) {
     move_t current_best_move;
     int start_time = get_time_ms();
-    int score = negamax(board, depth, -INFINITY, INFINITY, &current_best_move,
-                        search_info);
+    int score = negamax(board, tt, depth, -INFINITY, INFINITY,
+                        &current_best_move, search_info);
     int end_time = get_time_ms() - start_time;
 
     if (search_info->stopped) {
@@ -2354,8 +2434,10 @@ void uci_parse_go(board_t *board, char *move_string) {
     search_info.move_time = atoi(current + 9);
   }
 
+  transposition_table_t *tt = transposition_table_new(64);
+
   start_search_timer(&search_info);
-  search_position(board, &search_info);
+  search_position(board, &search_info, tt);
 }
 
 void uci_loop() {
