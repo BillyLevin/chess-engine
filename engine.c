@@ -1896,8 +1896,10 @@ void transposition_table_store(transposition_table_t *table, uint64_t hash,
 // returns true if it succeeds
 bool transposition_table_entry_get(transposition_table_entry_t *entry,
                                    uint64_t hash, int depth, int ply, int alpha,
-                                   int beta, int *score) {
+                                   int beta, move_t *best_move, int *score) {
   if (entry->hash == hash) {
+    *best_move = entry->best_move;
+
     if (entry->depth >= depth) {
       *score = entry->score;
 
@@ -2142,13 +2144,14 @@ int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
     return 0;
   }
 
+  move_t pv_move = 0ULL;
   int best_score = -INFINITY;
 
   transposition_table_entry_t *tt_entry =
       transposition_table_probe(tt, board->hash);
 
   if (transposition_table_entry_get(tt_entry, board->hash, depth, board->ply,
-                                    alpha, beta, &best_score)) {
+                                    alpha, beta, &pv_move, &best_score)) {
     return best_score;
   }
 
@@ -2156,6 +2159,16 @@ int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
 
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
+
+  // crappy move ordering
+  if (pv_move != 0ULL) {
+    for (size_t i = 1; i < move_list->count; i++) {
+      if (move_list->moves[i] == pv_move) {
+        move_list->moves[i] = move_list->moves[0];
+        move_list->moves[0] = pv_move;
+      }
+    }
+  }
 
   size_t legal_move_count = 0;
 
