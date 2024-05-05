@@ -128,6 +128,9 @@ typedef struct {
   int ply;
 } board_t;
 
+#define MAX_SEARCH_DEPTH 64
+const int INFINITE_SEARCH_TIME = -1;
+
 typedef struct {
   // uci arguments
   int time_left;
@@ -139,7 +142,7 @@ typedef struct {
   bool stopped;
   int stop_time;
   uint64_t nodes_searched;
-
+  move_t killer_moves[MAX_SEARCH_DEPTH + 1][2];
 } search_info_t;
 
 const wchar_t PIECE_UNICODE[12] = {0x2659, 0x2658, 0x2657, 0x2656,
@@ -262,9 +265,6 @@ const char FLAG_TO_ALGEBRAIC_NOTATION[4] = {'n', 'b', 'r', 'q'};
 
 const int PIECE_VALUES[13] = {100, 300, 300, 500, 900,   10000, 100,
                               300, 300, 500, 900, 10000, 0};
-
-const int MAX_SEARCH_DEPTH = 64;
-const int INFINITE_SEARCH_TIME = -1;
 
 typedef struct {
   uint64_t state;
@@ -889,6 +889,10 @@ uint8_t move_to(move_t move) { return ((move >> 6) & 0x3F); }
 uint8_t move_move_type(move_t move) { return ((move >> 12) & 0x03); }
 uint8_t move_flag(move_t move) { return ((move >> 14) & 0x03); }
 uint16_t move_score(move_t move) { return ((move >> 16) & 0xFFFF); }
+
+bool are_moves_equal(move_t move1, move_t move2) {
+  return (move1 & 0x0000FFFF) == (move2 & 0x0000FFFF);
+}
 
 void move_set_score(move_t *move, uint16_t score) {
   *move &= 0x0000FFFF;
@@ -2369,17 +2373,26 @@ void check_search_time(search_info_t *info) {
   }
 }
 
-void score_moves(board_t *board, move_list_t *move_list, move_t pv_move) {
+void score_moves(board_t *board, search_info_t *search_info,
+                 move_list_t *move_list, move_t pv_move) {
   for (size_t i = 0; i < move_list->count; i++) {
     move_t move = move_list->moves[i];
     piece_t captured = board->pieces[move_to(move)];
     piece_t moved = board->pieces[move_from(move)];
 
-    if (move == pv_move && pv_move != 0ULL) {
+    if (are_moves_equal(move, pv_move) && pv_move != 0ULL) {
       move_set_score(&move, 25000);
     } else if (captured != EMPTY) {
       move_set_score(&move,
                      20000 + PIECE_VALUES[captured] - PIECE_VALUES[moved]);
+    } else if (are_moves_equal(move,
+                               search_info->killer_moves[board->ply][0])) {
+
+      move_set_score(&move, 19000);
+    } else if (are_moves_equal(move,
+                               search_info->killer_moves[board->ply][0])) {
+
+      move_set_score(&move, 18990);
     } else {
       move_set_score(&move, 0);
     }
@@ -2429,7 +2442,7 @@ int quiescence_search(board_t *board, search_info_t *search_info, int alpha,
 
   move_list_t *move_list = move_list_new();
   generate_all_captures(board, move_list);
-  score_moves(board, move_list, 0ULL);
+  score_moves(board, search_info, move_list, 0ULL);
 
   for (size_t i = 0; i < move_list->count; i++) {
     order_moves(move_list, i);
@@ -2459,6 +2472,16 @@ int quiescence_search(board_t *board, search_info_t *search_info, int alpha,
 
   free(move_list);
   return best_score;
+}
+
+void store_killer_move(const board_t *board, search_info_t *search_info,
+                       int ply, move_t move) {
+  if (board->pieces[move_to(move)] == EMPTY) {
+    if (!are_moves_equal(move, search_info->killer_moves[ply][0])) {
+      search_info->killer_moves[ply][1] = search_info->killer_moves[ply][0];
+      search_info->killer_moves[ply][0] = move;
+    }
+  }
 }
 
 int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
@@ -2498,7 +2521,7 @@ int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
 
-  score_moves(board, move_list, pv_move);
+  score_moves(board, search_info, move_list, pv_move);
 
   size_t legal_move_count = 0;
 
@@ -2518,6 +2541,7 @@ int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
       transposition_table_store(tt, board->hash, 0, depth, board->ply,
                                 best_score, *best_move, TT_BETA_FLAG);
 
+      store_killer_move(board, search_info, board->ply, move_list->moves[i]);
       free(move_list);
       return beta;
     }
@@ -2749,6 +2773,11 @@ search_info_t search_info_new() {
   search_info.stopped = false;
   search_info.stop_time = -1;
   search_info.nodes_searched = 0ULL;
+
+  for (int ply = 0; ply < MAX_SEARCH_DEPTH + 1; ply++) {
+    search_info.killer_moves[ply][0] = 0ULL;
+    search_info.killer_moves[ply][1] = 0ULL;
+  }
 
   return search_info;
 }
