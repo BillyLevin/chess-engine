@@ -77,7 +77,7 @@ const uint8_t BISHOP_PROMOTION = 1;
 const uint8_t ROOK_PROMOTION = 2;
 const uint8_t QUEEN_PROMOTION = 3;
 
-typedef uint16_t move_t;
+typedef uint32_t move_t;
 
 typedef struct {
   move_t moves[512];
@@ -886,6 +886,12 @@ uint8_t move_from(move_t move) { return (move & 0x3F); }
 uint8_t move_to(move_t move) { return ((move >> 6) & 0x3F); }
 uint8_t move_move_type(move_t move) { return ((move >> 12) & 0x03); }
 uint8_t move_flag(move_t move) { return ((move >> 14) & 0x03); }
+uint16_t move_score(move_t move) { return ((move >> 16) & 0xFFFF); }
+
+void move_set_score(move_t *move, uint16_t score) {
+  *move &= 0x0000FFFF;
+  *move |= score << 16;
+}
 
 move_list_t *move_list_new() {
   move_list_t *move_list = malloc(sizeof(move_list_t));
@@ -2127,6 +2133,41 @@ void check_search_time(search_info_t *info) {
   }
 }
 
+void score_moves(board_t *board, move_list_t *move_list, move_t pv_move) {
+  for (size_t i = 0; i < move_list->count; i++) {
+    move_t move = move_list->moves[i];
+    piece_t captured = board->pieces[move_to(move)];
+    piece_t moved = board->pieces[move_from(move)];
+
+    if (move == pv_move) {
+      move_set_score(&move, 25000);
+    } else if (captured != EMPTY) {
+      move_set_score(&move,
+                     20000 + PIECE_VALUES[captured] - PIECE_VALUES[moved]);
+    } else {
+      move_set_score(&move, 0);
+    }
+
+    move_list->moves[i] = move;
+  }
+}
+
+void order_moves(move_list_t *move_list, size_t current_index) {
+  size_t best_index = current_index;
+  int best_score = move_score(move_list->moves[best_index]);
+
+  for (size_t i = current_index; i < move_list->count; i++) {
+    if (move_score(move_list->moves[i]) > best_score) {
+      best_index = i;
+      best_score = move_score(move_list->moves[i]);
+    }
+  }
+
+  move_t tmp = move_list->moves[current_index];
+  move_list->moves[current_index] = move_list->moves[best_index];
+  move_list->moves[best_index] = tmp;
+}
+
 int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
             int beta, move_t *best_move, search_info_t *search_info) {
   search_info->nodes_searched++;
@@ -2161,18 +2202,22 @@ int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
   generate_all_moves(board, move_list);
 
   // crappy move ordering
-  if (pv_move != 0ULL) {
-    for (size_t i = 1; i < move_list->count; i++) {
-      if (move_list->moves[i] == pv_move) {
-        move_list->moves[i] = move_list->moves[0];
-        move_list->moves[0] = pv_move;
-      }
-    }
-  }
+  // if (pv_move != 0ULL) {
+  //   for (size_t i = 1; i < move_list->count; i++) {
+  //     if (move_list->moves[i] == pv_move) {
+  //       move_list->moves[i] = move_list->moves[0];
+  //       move_list->moves[0] = pv_move;
+  //     }
+  //   }
+  // }
+
+  score_moves(board, move_list, pv_move);
 
   size_t legal_move_count = 0;
 
   for (size_t i = 0; i < move_list->count; i++) {
+    order_moves(move_list, i);
+
     if (!make_move(board, move_list->moves[i])) {
       unmake_move(board, move_list->moves[i]);
       continue;
