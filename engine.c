@@ -2201,16 +2201,6 @@ int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
   move_list_t *move_list = move_list_new();
   generate_all_moves(board, move_list);
 
-  // crappy move ordering
-  // if (pv_move != 0ULL) {
-  //   for (size_t i = 1; i < move_list->count; i++) {
-  //     if (move_list->moves[i] == pv_move) {
-  //       move_list->moves[i] = move_list->moves[0];
-  //       move_list->moves[0] = pv_move;
-  //     }
-  //   }
-  // }
-
   score_moves(board, move_list, pv_move);
 
   size_t legal_move_count = 0;
