@@ -287,6 +287,59 @@ uint64_t prng_generate_random(prng_t *prng) {
   return result * UINT64_C(2685821657736338717);
 }
 
+void piece_print(piece_t piece) {
+  setlocale(LC_CTYPE, "");
+  printf("  %lc", PIECE_UNICODE[piece]);
+}
+
+void board_print(const board_t *board) {
+  printf("\n");
+
+  for (int rank = 7; rank >= 0; rank--) {
+    for (int file = 0; file < 8; file++) {
+      if (file == 0) {
+        printf("%3d", rank + 1);
+      }
+
+      int square = (rank * 8) + file;
+
+      piece_t piece = board->pieces[square];
+
+      if (piece != EMPTY) {
+        piece_print(piece);
+      } else {
+        printf("%3d", 0);
+      }
+    }
+
+    printf("\n");
+  }
+
+  printf("   ");
+  char ranks[8] = "ABCDEFGH";
+  for (int i = 0; i < 8; i++) {
+    printf("%3c", ranks[i]);
+  }
+
+  printf("\n\nHalfmove clock count: %d\n", board->halfmove_clock);
+  printf("Side to play: %s\n", board->side == WHITE ? "White" : "Black");
+  printf("Castling rights:\n");
+  printf("  - White kingside: %s\n",
+         board->castle_rights & WHITE_KING_CASTLE ? "yes" : "no");
+  printf("  - White queenside: %s\n",
+         board->castle_rights & WHITE_QUEEN_CASTLE ? "yes" : "no");
+  printf("  - Black kingside: %s\n",
+         board->castle_rights & BLACK_KING_CASTLE ? "yes" : "no");
+  printf("  - Black queenside: %s\n",
+         board->castle_rights & BLACK_QUEEN_CASTLE ? "yes" : "no");
+  printf("En passant square: %s\n",
+         board->en_passant_square == NO_SQUARE
+             ? "-"
+             : SQUARE_TO_READABLE[board->en_passant_square]);
+  printf("Hash: 0x%luULL\n", board->hash);
+  printf("History length: %d\n", board->history_length);
+}
+
 // random numbers to be used for zobrist hashing
 // 12 * 64 = 768 for the pieces
 // + 1 for current side to move being black
@@ -455,6 +508,8 @@ uint64_t zobrist_add_piece(board_t *board, int square, piece_t piece) {
   default:
     printf("Tried to move piece from empty square!\n");
     printf("FROM: %s\n", SQUARE_TO_READABLE[square]);
+    printf("TO: %s\n", SQUARE_TO_READABLE[square]);
+    board_print(board);
     exit(EXIT_FAILURE);
   }
 
@@ -483,11 +538,6 @@ uint64_t generate_hash(const board_t *board) {
   }
 
   return hash;
-}
-
-void piece_print(piece_t piece) {
-  setlocale(LC_CTYPE, "");
-  printf("  %lc", PIECE_UNICODE[piece]);
 }
 
 void bitboard_print(uint64_t bitboard, piece_t piece) {
@@ -555,54 +605,6 @@ board_t *board_new() {
   board_t *board = malloc(sizeof(board_t));
   board_reset(board);
   return board;
-}
-
-void board_print(const board_t *board) {
-  printf("\n");
-
-  for (int rank = 7; rank >= 0; rank--) {
-    for (int file = 0; file < 8; file++) {
-      if (file == 0) {
-        printf("%3d", rank + 1);
-      }
-
-      int square = (rank * 8) + file;
-
-      piece_t piece = board->pieces[square];
-
-      if (piece != EMPTY) {
-        piece_print(piece);
-      } else {
-        printf("%3d", 0);
-      }
-    }
-
-    printf("\n");
-  }
-
-  printf("   ");
-  char ranks[8] = "ABCDEFGH";
-  for (int i = 0; i < 8; i++) {
-    printf("%3c", ranks[i]);
-  }
-
-  printf("\n\nHalfmove clock count: %d\n", board->halfmove_clock);
-  printf("Side to play: %s\n", board->side == WHITE ? "White" : "Black");
-  printf("Castling rights:\n");
-  printf("  - White kingside: %s\n",
-         board->castle_rights & WHITE_KING_CASTLE ? "yes" : "no");
-  printf("  - White queenside: %s\n",
-         board->castle_rights & WHITE_QUEEN_CASTLE ? "yes" : "no");
-  printf("  - Black kingside: %s\n",
-         board->castle_rights & BLACK_KING_CASTLE ? "yes" : "no");
-  printf("  - Black queenside: %s\n",
-         board->castle_rights & BLACK_QUEEN_CASTLE ? "yes" : "no");
-  printf("En passant square: %s\n",
-         board->en_passant_square == NO_SQUARE
-             ? "-"
-             : SQUARE_TO_READABLE[board->en_passant_square]);
-  printf("Hash: 0x%luULL\n", board->hash);
-  printf("History length: %d\n", board->history_length);
 }
 
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -2373,7 +2375,7 @@ void score_moves(board_t *board, move_list_t *move_list, move_t pv_move) {
     piece_t captured = board->pieces[move_to(move)];
     piece_t moved = board->pieces[move_from(move)];
 
-    if (move == pv_move) {
+    if (move == pv_move && pv_move != 0ULL) {
       move_set_score(&move, 25000);
     } else if (captured != EMPTY) {
       move_set_score(&move,
@@ -2402,13 +2404,70 @@ void order_moves(move_list_t *move_list, size_t current_index) {
   move_list->moves[best_index] = tmp;
 }
 
-int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
-            int beta, move_t *best_move, search_info_t *search_info) {
+int quiescence_search(board_t *board, search_info_t *search_info, int alpha,
+                      int beta) {
+  int best_score = evaluate_position(board);
+
+  // check move time expiry every 2048 nodes
+  if ((search_info->nodes_searched & 2047) == 0) {
+    check_search_time(search_info);
+  }
+
+  if (search_info->stopped) {
+    return 0;
+  }
+
   search_info->nodes_searched++;
 
-  if (depth == 0) {
-    return evaluate_position(board);
+  if (best_score >= beta) {
+    return beta;
   }
+
+  if (best_score > alpha) {
+    alpha = best_score;
+  }
+
+  move_list_t *move_list = move_list_new();
+  generate_all_captures(board, move_list);
+  score_moves(board, move_list, 0ULL);
+
+  for (size_t i = 0; i < move_list->count; i++) {
+    order_moves(move_list, i);
+
+    if (!make_move(board, move_list->moves[i])) {
+      unmake_move(board, move_list->moves[i]);
+      continue;
+    }
+
+    int score = -quiescence_search(board, search_info, -beta, -alpha);
+
+    unmake_move(board, move_list->moves[i]);
+
+    if (score > best_score) {
+      best_score = score;
+    }
+
+    if (score >= beta) {
+      free(move_list);
+      return beta;
+    }
+
+    if (score > alpha) {
+      alpha = score;
+    }
+  }
+
+  free(move_list);
+  return best_score;
+}
+
+int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
+            int beta, move_t *best_move, search_info_t *search_info) {
+  if (depth == 0) {
+    return quiescence_search(board, search_info, alpha, beta);
+  }
+
+  search_info->nodes_searched++;
 
   // check move time expiry every 2048 nodes
   if ((search_info->nodes_searched & 2047) == 0) {
