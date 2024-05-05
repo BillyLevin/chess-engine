@@ -1606,6 +1606,240 @@ void generate_all_moves(const board_t *board, move_list_t *move_list) {
   generate_castling_moves(board, move_list);
 }
 
+void generate_pawn_captures(const board_t *board, move_list_t *move_list) {
+  // each occupied square is set to `1`
+  uint64_t empty = ~(board->occupancies[WHITE] | board->occupancies[BLACK]);
+
+  if (board->side == WHITE) {
+    uint64_t pawns = board->white_pawns;
+
+    while (pawns != 0) {
+      int from_square = bitboard_pop_bit(&pawns);
+
+      uint64_t potential_single_push = 1ULL << (from_square + 8);
+
+      if ((potential_single_push & empty) != 0) {
+        if (is_promotion(from_square + 8, WHITE)) {
+          move_list_push(move_list, move_new(from_square, from_square + 8,
+                                             PROMOTION, QUEEN_PROMOTION));
+        }
+      }
+
+      uint64_t en_passant_bitboard = board->en_passant_square != NO_SQUARE
+                                         ? (1ULL << board->en_passant_square)
+                                         : 0ULL;
+
+      uint64_t enemy = board->occupancies[BLACK] | en_passant_bitboard;
+      uint64_t attacks = (PAWN_ATTACKS[WHITE][from_square]) & enemy;
+
+      while (attacks != 0) {
+        int attacked_square = bitboard_pop_bit(&attacks);
+
+        if (is_promotion(attacked_square, WHITE)) {
+          move_list_push(move_list, move_new(from_square, attacked_square,
+                                             PROMOTION, QUEEN_PROMOTION));
+        } else {
+          move_list_push(move_list,
+                         move_new(from_square, attacked_square, CAPTURE,
+                                  attacked_square == board->en_passant_square
+                                      ? EN_PASSANT_FLAG
+                                      : NO_FLAG));
+        }
+      }
+    }
+
+  } else {
+    uint64_t pawns = board->black_pawns;
+
+    while (pawns != 0) {
+      int from_square = bitboard_pop_bit(&pawns);
+
+      uint64_t potential_single_push = 1ULL << (from_square - 8);
+
+      if ((potential_single_push & empty) != 0) {
+        if (is_promotion(from_square - 8, BLACK)) {
+          move_list_push(move_list, move_new(from_square, from_square - 8,
+                                             PROMOTION, QUEEN_PROMOTION));
+        }
+      }
+
+      uint64_t en_passant_bitboard = board->en_passant_square != NO_SQUARE
+                                         ? (1ULL << board->en_passant_square)
+                                         : 0ULL;
+
+      uint64_t enemy = board->occupancies[WHITE] | en_passant_bitboard;
+
+      uint64_t attacks = (PAWN_ATTACKS[BLACK][from_square]) & enemy;
+
+      while (attacks != 0) {
+        int attacked_square = bitboard_pop_bit(&attacks);
+
+        if (is_promotion(attacked_square, BLACK)) {
+          move_list_push(move_list, move_new(from_square, attacked_square,
+                                             PROMOTION, QUEEN_PROMOTION));
+        } else {
+          move_list_push(move_list,
+                         move_new(from_square, attacked_square, CAPTURE,
+                                  attacked_square == board->en_passant_square
+                                      ? EN_PASSANT_FLAG
+                                      : NO_FLAG));
+        }
+      }
+    }
+  }
+}
+
+void generate_knight_captures(const board_t *board, move_list_t *move_list) {
+  uint64_t knights =
+      board->side == WHITE ? board->white_knights : board->black_knights;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  while (knights != 0) {
+    square_t from_square = bitboard_pop_bit(&knights);
+
+    uint64_t knight_moves =
+        (KNIGHT_ATTACKS[from_square]) & ~current_side_occupancy;
+
+    while (knight_moves != 0) {
+      square_t to_square = bitboard_pop_bit(&knight_moves);
+
+      bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+      if (is_capture) {
+        move_list_push(move_list,
+                       move_new(from_square, to_square, CAPTURE, NO_FLAG));
+      }
+    }
+  }
+}
+
+void generate_bishop_captures(const board_t *board, move_list_t *move_list) {
+  uint64_t bishops =
+      board->side == WHITE ? board->white_bishops : board->black_bishops;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  while (bishops != 0) {
+    square_t from_square = bitboard_pop_bit(&bishops);
+
+    uint64_t bishop_moves =
+        (get_bishop_attacks(from_square,
+                            current_side_occupancy | enemy_occupancy)) &
+        ~current_side_occupancy;
+
+    while (bishop_moves != 0) {
+      square_t to_square = bitboard_pop_bit(&bishop_moves);
+
+      bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+      if (is_capture) {
+        move_list_push(move_list,
+                       move_new(from_square, to_square, CAPTURE, NO_FLAG));
+      }
+    }
+  }
+}
+
+void generate_rook_captures(const board_t *board, move_list_t *move_list) {
+  uint64_t rooks =
+      board->side == WHITE ? board->white_rooks : board->black_rooks;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  while (rooks != 0) {
+    square_t from_square = bitboard_pop_bit(&rooks);
+
+    uint64_t rook_moves =
+        (get_rook_attacks(from_square,
+                          current_side_occupancy | enemy_occupancy)) &
+        ~current_side_occupancy;
+
+    while (rook_moves != 0) {
+      square_t to_square = bitboard_pop_bit(&rook_moves);
+
+      bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+      if (is_capture) {
+        move_list_push(move_list,
+                       move_new(from_square, to_square, CAPTURE, NO_FLAG));
+      }
+    }
+  }
+}
+
+void generate_queen_captures(const board_t *board, move_list_t *move_list) {
+  uint64_t queens =
+      board->side == WHITE ? board->white_queens : board->black_queens;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  while (queens != 0) {
+    square_t from_square = bitboard_pop_bit(&queens);
+
+    uint64_t queen_moves =
+        (get_queen_attacks(from_square,
+                           current_side_occupancy | enemy_occupancy)) &
+        ~current_side_occupancy;
+
+    while (queen_moves != 0) {
+      square_t to_square = bitboard_pop_bit(&queen_moves);
+
+      bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+      if (is_capture) {
+        move_list_push(move_list,
+                       move_new(from_square, to_square, CAPTURE, NO_FLAG));
+      }
+    }
+  }
+}
+
+void generate_king_captures(const board_t *board, move_list_t *move_list) {
+  uint64_t king = board->side == WHITE ? board->white_king : board->black_king;
+
+  side_t current_side = board->side;
+
+  uint64_t current_side_occupancy = board->occupancies[current_side];
+  uint64_t enemy_occupancy = board->occupancies[current_side ^ 1];
+
+  square_t from_square = bitboard_pop_bit(&king);
+
+  uint64_t king_moves = KING_ATTACKS[from_square] & ~current_side_occupancy;
+
+  while (king_moves != 0) {
+    square_t to_square = bitboard_pop_bit(&king_moves);
+
+    bool is_capture = ((1ULL << to_square) & enemy_occupancy) != 0;
+
+    if (is_capture) {
+      move_list_push(move_list,
+                     move_new(from_square, to_square, CAPTURE, NO_FLAG));
+    }
+  }
+}
+
+void generate_all_captures(const board_t *board, move_list_t *move_list) {
+  generate_pawn_captures(board, move_list);
+  generate_knight_captures(board, move_list);
+  generate_bishop_captures(board, move_list);
+  generate_rook_captures(board, move_list);
+  generate_queen_captures(board, move_list);
+  generate_king_captures(board, move_list);
+}
+
 bool is_in_check(board_t *board, side_t side) {
   uint64_t king_bitboard =
       side == WHITE ? board->white_king : board->black_king;
