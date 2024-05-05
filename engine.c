@@ -43,6 +43,18 @@ const char SQUARE_TO_READABLE[][3] = {
   "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
   "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
 };
+
+// used to flip to the correct side's perspective
+const square_t SQUARE_MIRROR[64] = {
+  A8, B8, C8, D8, E8, F8, G8, H8,
+  A7, B7, C7, D7, E7, F7, G7, H7,
+  A6, B6, C6, D6, E6, F6, G6, H6,
+  A5, B5, C5, D5, E5, F5, G5, H5,
+  A4, B4, C4, D4, E4, F4, G4, H4,
+  A3, B3, C3, D3, E3, F3, G3, H3,
+  A2, B2, C2, D2, E2, F2, G2, H2,
+  A1, B1, C1, D1, E1, F1, G1, H1,
+};
 // clang-format on
 
 typedef enum {
@@ -265,6 +277,63 @@ const char FLAG_TO_ALGEBRAIC_NOTATION[4] = {'n', 'b', 'r', 'q'};
 
 const int PIECE_VALUES[13] = {100, 300, 300, 500, 900,   10000, 100,
                               300, 300, 500, 900, 10000, 0};
+
+// clang-format off
+const int PAWN_PST[64] = { 
+   0,  0,  0,  0,  0,  0,  0,  0,
+  50, 50, 50, 50, 50, 50, 50, 50,
+  10, 10, 20, 30, 30, 20, 10, 10,
+   5,  5, 10, 25, 25, 10,  5,  5,
+   0,  0,  0, 20, 20,  0,  0,  0,
+   5, -5,-10,  0,  0,-10, -5,  5,
+   5, 10, 10,-20,-20, 10, 10,  5,
+   0,  0,  0,  0,  0,  0,  0,  0
+};
+
+const int KNIGHT_PST[64] = { 
+  -50,-40,-30,-30,-30,-30,-40,-50,
+  -40,-20,  0,  0,  0,  0,-20,-40,
+  -30,  0, 10, 15, 15, 10,  0,-30,
+  -30,  5, 15, 20, 20, 15,  5,-30,
+  -30,  0, 15, 20, 20, 15,  0,-30,
+  -30,  5, 10, 15, 15, 10,  5,-30,
+  -40,-20,  0,  5,  5,  0,-20,-40,
+  -50,-40,-30,-30,-30,-30,-40,-50,
+};
+
+const int BISHOP_PST[64] = { 
+  -20,-10,-10,-10,-10,-10,-10,-20,
+  -10,  0,  0,  0,  0,  0,  0,-10,
+  -10,  0,  5, 10, 10,  5,  0,-10,
+  -10,  5,  5, 10, 10,  5,  5,-10,
+  -10,  0, 10, 10, 10, 10,  0,-10,
+  -10, 10, 10, 10, 10, 10, 10,-10,
+  -10,  5,  0,  0,  0,  0,  5,-10,
+  -20,-10,-10,-10,-10,-10,-10,-20,
+};
+
+const int ROOK_PST[64] = {
+  0,  0,  0,  0,  0,  0,  0,  0,
+  5, 10, 10, 10, 10, 10, 10,  5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+ -5,  0,  0,  0,  0,  0,  0, -5,
+  0,  0,  0,  5,  5,  0,  0,  0
+};
+
+const int KING_PST[64] = {
+  -30,-40,-40,-50,-50,-40,-40,-30,
+  -30,-40,-40,-50,-50,-40,-40,-30,
+  -30,-40,-40,-50,-50,-40,-40,-30,
+  -30,-40,-40,-50,-50,-40,-40,-30,
+  -20,-30,-30,-40,-40,-30,-30,-20,
+  -10,-20,-20,-20,-20,-20,-20,-10,
+   20, 20,  0,  0,  0,  0, 20, 20,
+   20, 30, 10,  0,  0, 10, 30, 20
+};
+// clang-format on
 
 typedef struct {
   uint64_t state;
@@ -2352,10 +2421,34 @@ int evaluate_position(board_t *board) {
 
     if (piece >= WHITE_PAWN && piece <= WHITE_KING) {
       white_score += PIECE_VALUES[piece];
+
+      if (piece == WHITE_PAWN) {
+        white_score += PAWN_PST[SQUARE_MIRROR[square]];
+      } else if (piece == WHITE_KNIGHT) {
+        white_score += KNIGHT_PST[SQUARE_MIRROR[square]];
+      } else if (piece == WHITE_BISHOP) {
+        white_score += BISHOP_PST[SQUARE_MIRROR[square]];
+      } else if (piece == WHITE_ROOK) {
+        white_score += ROOK_PST[SQUARE_MIRROR[square]];
+      } else if (piece == WHITE_KING) {
+        white_score += KING_PST[SQUARE_MIRROR[square]];
+      }
     }
 
     if (piece >= BLACK_PAWN && piece <= BLACK_KING) {
       black_score += PIECE_VALUES[piece];
+
+      if (piece == BLACK_PAWN) {
+        black_score += PAWN_PST[square];
+      } else if (piece == BLACK_KNIGHT) {
+        black_score += KNIGHT_PST[square];
+      } else if (piece == BLACK_BISHOP) {
+        black_score += BISHOP_PST[square];
+      } else if (piece == BLACK_ROOK) {
+        black_score += ROOK_PST[square];
+      } else if (piece == BLACK_KING) {
+        black_score += KING_PST[square];
+      }
     }
   }
 
