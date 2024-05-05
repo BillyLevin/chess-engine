@@ -2463,6 +2463,10 @@ int quiescence_search(board_t *board, search_info_t *search_info, int alpha,
 
 int negamax(board_t *board, transposition_table_t *tt, int depth, int alpha,
             int beta, move_t *best_move, search_info_t *search_info) {
+  if (is_in_check(board, board->side)) {
+    depth++;
+  }
+
   if (depth == 0) {
     return quiescence_search(board, search_info, alpha, beta);
   }
