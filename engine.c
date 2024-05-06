@@ -2466,26 +2466,38 @@ void check_search_time(search_info_t *info) {
   }
 }
 
+// copied from blunder <3
+// https://github.com/algerbrex/blunder
+const uint8_t MVV_LVA[7][6] = {
+    {15, 14, 13, 12, 11, 10}, // victim Pawn
+    {25, 24, 23, 22, 21, 20}, // victim Knight
+    {35, 34, 33, 32, 31, 30}, // victim Bishop
+    {45, 44, 43, 42, 41, 40}, // victim Rook
+    {55, 54, 53, 52, 51, 50}, // victim Queen
+
+    {0, 0, 0, 0, 0, 0}, // victim King
+};
+
 void score_moves(board_t *board, search_info_t *search_info,
                  move_list_t *move_list, move_t pv_move) {
   for (size_t i = 0; i < move_list->count; i++) {
     move_t move = move_list->moves[i];
     piece_t captured = board->pieces[move_to(move)];
-    piece_t moved = board->pieces[move_from(move)];
 
     if (are_moves_equal(move, pv_move) && pv_move != 0ULL) {
       move_set_score(&move, 25000);
     } else if (captured != EMPTY) {
-      move_set_score(&move,
-                     20000 + PIECE_VALUES[captured] - PIECE_VALUES[moved]);
+      piece_t moved = board->pieces[move_from(move)];
+      move_set_score(&move, 20000 + MVV_LVA[captured % 6][moved % 6]);
     } else if (are_moves_equal(move,
                                search_info->killer_moves[board->ply][0])) {
-
       move_set_score(&move, 19000);
     } else if (are_moves_equal(move,
-                               search_info->killer_moves[board->ply][0])) {
-
+                               search_info->killer_moves[board->ply][1])) {
       move_set_score(&move, 18990);
+    } else if (move_move_type(move) == PROMOTION &&
+               move_flag(move) == QUEEN_PROMOTION) {
+      move_set_score(&move, 18500);
     } else {
       move_set_score(&move, 0);
     }
